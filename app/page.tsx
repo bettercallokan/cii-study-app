@@ -8,8 +8,9 @@ import {
 } from "lucide-react";
 import type { Module } from "@/utils/supabase/types";
 
-// Sayfa her istekte sunucu tarafında render edilir (statik pre-render atlanır)
+// Her istekte sunucu tarafında render et, Vercel edge cache'i devre dışı bırak
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 // Server-side Supabase client (env değişkenlerini doğrudan okur)
 function getServerSupabase() {
