@@ -462,13 +462,14 @@ CREATE OR REPLACE FUNCTION public.apply_sm2(
   p_flashcard_id UUID,
   p_quality      SMALLINT
 )
-RETURNS public.flashcard_reviews
+-- SETOF kullanılır: RETURNS <tablo_adı> Supabase'de relation hatası verir
+RETURNS SETOF public.flashcard_reviews
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_row  public.flashcard_reviews;
+  -- Satır tipi değişken yerine scalar değişkenler kullanılır (42P01 hatasını önler)
   v_ef   NUMERIC(4,2);
   v_int  INTEGER;
   v_reps INTEGER;
@@ -487,22 +488,22 @@ BEGIN
   VALUES (p_user_id, p_flashcard_id)
   ON CONFLICT (user_id, flashcard_id) DO NOTHING;
 
-  SELECT * INTO v_row
-  FROM public.flashcard_reviews
-  WHERE user_id = p_user_id AND flashcard_id = p_flashcard_id;
-
-  v_ef   := v_row.ease_factor;
-  v_int  := v_row.interval_days;
-  v_reps := v_row.repetitions;
+  -- Mevcut SM-2 durumunu scalar değişkenlere yükle
+  SELECT ease_factor, interval_days, repetitions
+  INTO   v_ef,        v_int,         v_reps
+  FROM   public.flashcard_reviews
+  WHERE  user_id = p_user_id AND flashcard_id = p_flashcard_id;
 
   -- SM-2 çekirdek mantığı
   IF p_quality >= 3 THEN
     -- Doğru yanıt: aralığı artır
-    CASE v_reps
-      WHEN 0 THEN v_int := 1;
-      WHEN 1 THEN v_int := 6;
-      ELSE         v_int := CEIL(v_int * v_ef)::INTEGER;
-    END CASE;
+    IF v_reps = 0 THEN
+      v_int := 1;
+    ELSIF v_reps = 1 THEN
+      v_int := 6;
+    ELSE
+      v_int := CEIL(v_int * v_ef)::INTEGER;
+    END IF;
     v_reps := v_reps + 1;
   ELSE
     -- Yanlış yanıt: aralık ve tekrar sayısını sıfırla
@@ -522,10 +523,12 @@ BEGIN
     last_quality     = p_quality,
     next_review_date = CURRENT_DATE + v_int,
     last_reviewed_at = NOW()
-  WHERE user_id = p_user_id AND flashcard_id = p_flashcard_id
-  RETURNING * INTO v_row;
+  WHERE user_id = p_user_id AND flashcard_id = p_flashcard_id;
 
-  RETURN v_row;
+  -- RETURNING INTO yerine ayrı SELECT; RETURN QUERY ile satırı döndür
+  RETURN QUERY
+    SELECT * FROM public.flashcard_reviews
+    WHERE  user_id = p_user_id AND flashcard_id = p_flashcard_id;
 END;
 $$;
 
