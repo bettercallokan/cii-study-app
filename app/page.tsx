@@ -6,6 +6,7 @@ import {
   LayoutGrid,
   Layers,
 } from "lucide-react";
+import Link from "next/link";
 import type { Module } from "@/utils/supabase/types";
 
 // Her istekte sunucu tarafında render et, Vercel edge cache'i devre dışı bırak
@@ -150,7 +151,8 @@ function ModuleCard({ module, index }: { module: Module; index: number }) {
   ][index % 3];
 
   return (
-    <article className="group relative flex flex-col rounded-2xl border border-slate-800 bg-slate-900/60 hover:bg-slate-900 hover:border-slate-700 transition-all duration-200 overflow-hidden cursor-pointer">
+    <Link href={`/modules/${module.id}`} className="block">
+    <article className="group relative flex flex-col rounded-2xl border border-slate-800 bg-slate-900/60 hover:bg-slate-900 hover:border-slate-700 transition-all duration-200 overflow-hidden cursor-pointer h-full">
       {/* Üst renk şeridi */}
       <div className={`h-1 w-full bg-gradient-to-r ${accentClasses.split(" ")[0]} via-transparent to-transparent`} />
 
@@ -189,6 +191,7 @@ function ModuleCard({ module, index }: { module: Module; index: number }) {
         </div>
       </div>
     </article>
+    </Link>
   );
 }
 
