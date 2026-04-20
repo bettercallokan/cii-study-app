@@ -168,14 +168,14 @@ const studyTools = [
     title: "Module Summaries",
     description: "Condensed overviews of key concepts and principles",
     badge: "12 SUMMARIES",
-    href: "/modules",
+    href: "/materials",
   },
   {
     icon: Lightbulb,
     title: "Critical Insights",
     description: "Essential information and exam-critical points",
     badge: "48 INSIGHTS",
-    href: "/modules",
+    href: "/materials",
   },
   {
     icon: Layers,
