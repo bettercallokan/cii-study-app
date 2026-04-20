@@ -51,7 +51,7 @@ function ErrorCard({ message }: { message: string }) {
   );
 }
 
-// ─── Selection View ───────────────────────────────────────────
+// ─── Selection View (grid + lessons panel) ────────────────────
 
 function SelectionView({
   onSelectModule,
@@ -101,104 +101,116 @@ function SelectionView({
     [expandedId, lessonCache]
   );
 
-  if (modules === null) return <LoadingSpinner label="Modüller yükleniyor…" />;
+  if (modules === null) return <LoadingSpinner label="Loading modules…" />;
   if (error) return <ErrorCard message={error} />;
   if (modules.length === 0) {
     return (
       <div className="text-center py-16 rounded-xl border border-border bg-card">
         <Layers className="w-10 h-10 mx-auto mb-3 text-muted-foreground opacity-30" />
-        <p className="font-medium text-foreground mb-1">Modül bulunamadı</p>
-        <p className="text-sm text-muted-foreground">Henüz aktif modül eklenmemiş.</p>
+        <p className="font-medium text-foreground mb-1">No modules found</p>
+        <p className="text-sm text-muted-foreground">No active modules have been added yet.</p>
       </div>
     );
   }
 
-  return (
-    <div className="space-y-3">
-      <p className="text-sm font-medium text-muted-foreground mb-4">
-        Flashcard çalışmak istediğiniz modül veya dersi seçin:
-      </p>
-      {modules.map((mod) => {
-        const title = mod.title.en;
-        const isExpanded = expandedId === mod.id;
-        const lessons = lessonCache[mod.id] ?? [];
-        const isLoadingLessons = loadingLessonId === mod.id;
+  const expandedModule = modules.find((m) => m.id === expandedId);
+  const expandedLessons = expandedId ? (lessonCache[expandedId] ?? []) : [];
+  const isLoadingLessons = loadingLessonId === expandedId;
 
-        return (
-          <div
-            key={mod.id}
-            className="rounded-xl border border-border bg-card overflow-hidden"
-          >
-            <div className="flex items-center gap-4 p-5">
-              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 shrink-0">
-                <GraduationCap className="w-5 h-5 text-primary" />
+  return (
+    <div className="space-y-4">
+      <p className="text-sm font-medium text-muted-foreground">
+        Select a module or lesson to start studying:
+      </p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {modules.map((mod) => {
+          const title = mod.title.en;
+          const isExpanded = expandedId === mod.id;
+
+          return (
+            <div
+              key={mod.id}
+              className={cn(
+                "rounded-xl border bg-card p-5 transition-all",
+                isExpanded ? "border-primary/40" : "border-border"
+              )}
+            >
+              <div className="flex items-start gap-3 mb-4">
+                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 shrink-0">
+                  <GraduationCap className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-foreground leading-snug">{title}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">v{mod.version}</p>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-foreground truncate">{title}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Tüm dersler · v{mod.version}
-                </p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => onSelectModule(mod.id, title)}
-                  className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
+                  className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
                 >
-                  Tümünü çalış
+                  Study All
                 </button>
                 <button
                   onClick={() => handleToggle(mod)}
-                  className="p-1.5 rounded-lg hover:bg-secondary/50 transition-colors text-muted-foreground"
-                  aria-label="Dersleri göster"
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition-colors",
+                    isExpanded
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "border-border bg-secondary/30 text-muted-foreground hover:text-foreground"
+                  )}
                 >
+                  Units
                   <ChevronDown
-                    className={cn(
-                      "w-4 h-4 transition-transform",
-                      isExpanded && "rotate-180"
-                    )}
+                    className={cn("w-3.5 h-3.5 transition-transform", isExpanded && "rotate-180")}
                   />
                 </button>
               </div>
             </div>
+          );
+        })}
+      </div>
 
-            {isExpanded && (
-              <div className="border-t border-border">
-                {isLoadingLessons ? (
-                  <LoadingSpinner label="Dersler yükleniyor…" />
-                ) : lessons.length === 0 ? (
-                  <p className="px-5 py-4 text-sm text-muted-foreground">
-                    Bu modülde ders bulunamadı.
-                  </p>
-                ) : (
-                  <ul className="divide-y divide-border">
-                    {lessons.map((lesson) => (
-                      <li key={lesson.id}>
-                        <button
-                          onClick={() =>
-                            onSelectLesson(lesson.id, lesson.title.en)
-                          }
-                          className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-secondary/30 transition-colors text-left group"
-                        >
-                          <BookOpen className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-sm text-foreground flex-1 truncate group-hover:text-primary transition-colors">
-                            {lesson.title.en}
-                          </span>
-                          {lesson.estimated_duration_minutes && (
-                            <span className="text-xs text-muted-foreground shrink-0">
-                              ~{lesson.estimated_duration_minutes} dk
-                            </span>
-                          )}
-                          <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
+      {/* Lessons panel below grid */}
+      {expandedId && expandedModule && (
+        <div className="rounded-xl border border-primary/20 bg-card overflow-hidden">
+          <div className="px-5 py-4 border-b border-border">
+            <h3 className="font-semibold text-foreground text-sm">
+              {expandedModule.title.en} — Lessons
+            </h3>
           </div>
-        );
-      })}
+          {isLoadingLessons ? (
+            <LoadingSpinner label="Loading lessons…" />
+          ) : expandedLessons.length === 0 ? (
+            <p className="px-5 py-4 text-sm text-muted-foreground">
+              No lessons found for this module.
+            </p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {expandedLessons.map((lesson) => (
+                <li key={lesson.id}>
+                  <button
+                    onClick={() => onSelectLesson(lesson.id, lesson.title.en)}
+                    className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-secondary/30 transition-colors text-left group"
+                  >
+                    <BookOpen className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-sm text-foreground flex-1 truncate group-hover:text-primary transition-colors">
+                      {lesson.title.en}
+                    </span>
+                    {lesson.estimated_duration_minutes && (
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        ~{lesson.estimated_duration_minutes} min
+                      </span>
+                    )}
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -250,7 +262,7 @@ function FlashcardViewer({ cards }: { cards: Flashcard[] }) {
         </span>
         <span className="flex items-center gap-1.5">
           <Flame className="w-4 h-4 text-orange-500" />
-          {masteredIds.size} öğrenildi
+          {masteredIds.size} mastered
         </span>
       </div>
 
@@ -282,7 +294,7 @@ function FlashcardViewer({ cards }: { cards: Flashcard[] }) {
             {card.front.en}
           </p>
           <p className="text-sm text-muted-foreground text-center mt-4">
-            Cevabı görmek için tıklayın
+            Click to reveal answer
           </p>
         </div>
 
@@ -293,7 +305,7 @@ function FlashcardViewer({ cards }: { cards: Flashcard[] }) {
             !isFlipped ? "opacity-0 pointer-events-none" : "opacity-100"
           )}
         >
-          <span className="text-xs font-medium text-green-500 mb-4">Cevap</span>
+          <span className="text-xs font-medium text-green-500 mb-4">Answer</span>
           <p className="text-lg text-foreground leading-relaxed flex-1">
             {card.back.en}
           </p>
@@ -316,14 +328,14 @@ function FlashcardViewer({ cards }: { cards: Flashcard[] }) {
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border bg-card hover:bg-secondary/50 transition-colors text-sm font-medium text-foreground"
           >
             <XCircle className="w-4 h-4 text-red-500" />
-            Tekrar
+            Again
           </button>
           <button
             onClick={markMastered}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary/90 transition-colors text-sm font-medium text-primary-foreground"
           >
             <CheckCircle2 className="w-4 h-4" />
-            Öğrendim
+            Got it
           </button>
         </div>
 
@@ -343,14 +355,14 @@ function FlashcardViewer({ cards }: { cards: Flashcard[] }) {
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <Shuffle className="w-4 h-4" />
-          Karıştır
+          Shuffle
         </button>
         <button
           onClick={reset}
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <RotateCcw className="w-4 h-4" />
-          Sıfırla
+          Reset
         </button>
       </div>
     </div>
@@ -390,7 +402,7 @@ function StudyView({
   }, [moduleId, lessonId]);
 
   if (error) return <ErrorCard message={error} />;
-  if (cards === null) return <LoadingSpinner label="Kartlar yükleniyor…" />;
+  if (cards === null) return <LoadingSpinner label="Loading cards…" />;
 
   return (
     <div>
@@ -399,10 +411,10 @@ function StudyView({
         <div className="flex items-center gap-2.5 min-w-0">
           <Layers className="w-4 h-4 text-primary shrink-0" />
           <span className="text-sm font-medium text-foreground truncate">
-            {filterLabel || "Yükleniyor…"}
+            {filterLabel || "Loading…"}
           </span>
           <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium shrink-0">
-            {cards.length} kart
+            {cards.length} cards
           </span>
         </div>
         <button
@@ -410,16 +422,16 @@ function StudyView({
           className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0 ml-4"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          Değiştir
+          Change
         </button>
       </div>
 
       {cards.length === 0 ? (
         <div className="text-center py-16 rounded-xl border border-border bg-card">
           <Layers className="w-10 h-10 mx-auto mb-3 text-muted-foreground opacity-30" />
-          <p className="font-medium text-foreground mb-1">Kart bulunamadı</p>
+          <p className="font-medium text-foreground mb-1">No cards found</p>
           <p className="text-sm text-muted-foreground">
-            Bu filtre için henüz flashcard eklenmemiş.
+            No flashcards have been added for this filter yet.
           </p>
         </div>
       ) : (
@@ -445,7 +457,7 @@ function FlashcardsContent() {
     if (!hasFilter) { setFilterLabel(""); return; }
     const sb = getSupabase();
     if (!sb) {
-      setFilterLabel(lessonId ? "Ders" : "Modül");
+      setFilterLabel(lessonId ? "Lesson" : "Module");
       return;
     }
     if (lessonId) {
@@ -455,7 +467,7 @@ function FlashcardsContent() {
         .single()
         .then(({ data }) => {
           setFilterLabel(
-            data ? (data as { title: { en: string } }).title.en : "Ders"
+            data ? (data as { title: { en: string } }).title.en : "Lesson"
           );
         });
     } else if (moduleId) {
@@ -465,7 +477,7 @@ function FlashcardsContent() {
         .single()
         .then(({ data }) => {
           setFilterLabel(
-            data ? (data as { title: { en: string } }).title.en : "Modül"
+            data ? (data as { title: { en: string } }).title.en : "Module"
           );
         });
     }
@@ -478,15 +490,15 @@ function FlashcardsContent() {
         <div className="mb-8">
           <div className="flex items-center gap-2 text-xs font-medium text-primary mb-3">
             <Layers className="w-4 h-4" />
-            Aralıklı Tekrar
+            Spaced Repetition
           </div>
           <h1 className="text-2xl font-semibold text-foreground tracking-tight">
-            Flashcard Destesi
+            Flashcard Deck
           </h1>
           <p className="text-muted-foreground mt-1">
             {hasFilter
-              ? filterLabel || "Yükleniyor…"
-              : "Çalışmak istediğiniz modül veya dersi seçin"}
+              ? filterLabel || "Loading…"
+              : "Select a module or lesson to start studying"}
           </p>
         </div>
 
