@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import {
   Settings,
   User,
@@ -14,7 +14,19 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const settingsSections = [
+type SettingItem = {
+  label: string;
+  description: string;
+  toggle?: boolean;
+  enabled?: boolean;
+  select?: boolean;
+};
+
+const settingsSections: {
+  title: string;
+  icon: React.ElementType;
+  items: SettingItem[];
+}[] = [
   {
     title: "Account",
     icon: User,
@@ -73,7 +85,7 @@ function ToggleSwitch({ enabled, onChange }: { enabled: boolean; onChange: () =>
 function SettingsSection({
   section,
 }: {
-  section: (typeof settingsSections)[0];
+  section: { title: string; icon: React.ElementType; items: SettingItem[] };
 }) {
   const [toggleStates, setToggleStates] = useState<Record<string, boolean>>(
     section.items.reduce((acc, item) => {
