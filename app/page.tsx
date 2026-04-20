@@ -19,10 +19,10 @@ import { cn } from "@/lib/utils";
 const overallProgress = 65;
 
 const currentModule = {
-  id: "module-3",
-  number: "03",
-  title: "Insurance Contract Law",
-  unit: "Unit 2: Formation of Contracts",
+  id: "w01",
+  number: "W01",
+  title: "Award in General Insurance",
+  unit: "Unit 1 · Section A: The role of risk in insurance",
   progress: 45,
   lastAccessed: "2 hours ago",
 };
@@ -105,7 +105,7 @@ function ContinueLearningCard() {
         </div>
         <ProgressBar value={currentModule.progress} />
         <Link
-          href={`/modules/${currentModule.id}`}
+          href={`/courses/${currentModule.id}`}
           className="mt-4 flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors"
         >
           <Zap className="w-4 h-4" />
