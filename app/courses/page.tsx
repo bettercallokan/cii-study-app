@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { BookOpen, ClipboardList, Clock, ChevronRight, GraduationCap } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -9,8 +11,7 @@ const courses = [
     subtitle: "W01",
     description:
       "Fundamental principles of insurance, legal frameworks, and market structure.",
-    units: 7,
-    totalSections: 52,
+    units: 6,
     examQuestions: 100,
     examDuration: "2 hours",
     color: "blue",
@@ -22,7 +23,6 @@ const courses = [
     description:
       "Risk assessment, underwriting procedures, pricing and exposure management.",
     units: 11,
-    totalSections: 48,
     examQuestions: 75,
     examDuration: "2 hours",
     color: "purple",
@@ -34,7 +34,6 @@ const courses = [
     description:
       "Claims process, settlement procedures, fraud detection and expense management.",
     units: 7,
-    totalSections: 41,
     examQuestions: 75,
     examDuration: "2 hours",
     color: "emerald",

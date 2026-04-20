@@ -2,16 +2,12 @@
 
 import Link from "next/link";
 import {
-  ArrowRight,
   TrendingUp,
   TrendingDown,
   Clock,
   Target,
   Zap,
   ChevronRight,
-  FileText,
-  Lightbulb,
-  Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -22,7 +18,7 @@ const currentModule = {
   id: "w01",
   number: "W01",
   title: "Award in General Insurance",
-  unit: "Unit 1 · Section A: The role of risk in insurance",
+  unit: "Unit 1 · A: The role of risk in insurance",
   progress: 45,
   lastAccessed: "2 hours ago",
 };
@@ -162,70 +158,6 @@ function KnowledgeGapCard() {
   );
 }
 
-const studyTools = [
-  {
-    icon: FileText,
-    title: "Module Summaries",
-    description: "Condensed overviews of key concepts and principles",
-    badge: "12 SUMMARIES",
-    href: "/materials",
-  },
-  {
-    icon: Lightbulb,
-    title: "Critical Insights",
-    description: "Essential information and exam-critical points",
-    badge: "48 INSIGHTS",
-    href: "/materials",
-  },
-  {
-    icon: Layers,
-    title: "Flashcard Deck",
-    description: "Interactive cards for rapid knowledge retention",
-    badge: "320 CARDS",
-    href: "/flashcards",
-  },
-];
-
-function QuickStudyTools() {
-  return (
-    <div>
-      <h2 className="text-sm font-medium text-muted-foreground mb-3">
-        Quick Study Tools
-      </h2>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {studyTools.map((tool) => (
-          <Link
-            key={tool.title}
-            href={tool.href}
-            className="group flex flex-col rounded-xl border border-border bg-card hover:border-emerald-500/30 hover:bg-emerald-500/5 transition-all duration-200 overflow-hidden"
-          >
-            {/* Top section */}
-            <div className="p-5 flex-1">
-              <div className="flex items-center justify-center w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 mb-4">
-                <tool.icon className="w-5 h-5 text-emerald-400" />
-              </div>
-              <h3 className="font-semibold text-foreground group-hover:text-emerald-400 transition-colors mb-1.5">
-                {tool.title}
-              </h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                {tool.description}
-              </p>
-            </div>
-
-            {/* Bottom bar */}
-            <div className="px-5 py-3 border-t border-border flex items-center justify-between">
-              <span className="text-xs font-semibold tracking-wider text-emerald-400">
-                {tool.badge}
-              </span>
-              <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-emerald-400 group-hover:translate-x-0.5 transition-all duration-200" />
-            </div>
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function RecentActivityCard() {
   return (
     <div className="rounded-xl border border-border bg-card p-5">
@@ -275,10 +207,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Full-width Quick Study Tools */}
-        <div className="mt-6">
-          <QuickStudyTools />
-        </div>
       </div>
     </div>
   );
