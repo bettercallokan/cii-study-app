@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   Layers,
   RotateCcw,
@@ -9,233 +10,467 @@ import {
   CheckCircle2,
   XCircle,
   Shuffle,
-  Clock,
   Flame,
   BookOpen,
+  ArrowLeft,
+  ChevronDown,
+  Loader2,
+  AlertCircle,
+  GraduationCap,
 } from "lucide-react";
+import { createClient } from "@supabase/supabase-js";
 import { cn } from "@/lib/utils";
+import type { Module, Lesson, Flashcard } from "@/utils/supabase/types";
 
-const flashcardDecks = [
-  { id: "1", name: "Insurance Principles", cards: 45, mastered: 32, color: "primary" },
-  { id: "2", name: "Contract Law", cards: 38, mastered: 15, color: "green" },
-  { id: "3", name: "Risk Assessment", cards: 52, mastered: 8, color: "yellow" },
-  { id: "4", name: "Claims Management", cards: 41, mastered: 0, color: "red" },
-];
+// ─── Supabase client (null-safe for missing env vars) ─────────
 
-const sampleCards = [
-  {
-    id: 1,
-    question: "What is the principle of Utmost Good Faith (Uberrimae Fidei)?",
-    answer:
-      "A legal principle requiring both parties to an insurance contract to act honestly and disclose all material facts. The insured must reveal anything that might influence the insurer&apos;s decision to accept the risk or set the premium.",
-    module: "Insurance Principles",
-  },
-  {
-    id: 2,
-    question: "Define Insurable Interest",
-    answer:
-      "The legal right to insure arising from a financial relationship between the insured and the subject matter of insurance. Without insurable interest, an insurance contract would be a mere wager and void under law.",
-    module: "Contract Law",
-  },
-  {
-    id: 3,
-    question: "What is the difference between indemnity and benefit policies?",
-    answer:
-      "Indemnity policies aim to restore the insured to their pre-loss financial position (e.g., property insurance). Benefit policies pay a fixed sum regardless of the actual loss (e.g., life insurance).",
-    module: "Insurance Principles",
-  },
-];
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anon) return null;
+  return createClient(url, anon);
+}
 
-function ProgressRing({ progress, size = 48 }: { progress: number; size?: number }) {
-  const radius = (size - 8) / 2;
-  const circumference = radius * 2 * Math.PI;
-  const offset = circumference - (progress / 100) * circumference;
+// ─── Shared UI primitives ─────────────────────────────────────
 
+function LoadingSpinner({ label }: { label?: string }) {
   return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <svg className="transform -rotate-90" width={size} height={size}>
-        <circle
-          className="text-secondary"
-          strokeWidth="4"
-          stroke="currentColor"
-          fill="transparent"
-          r={radius}
-          cx={size / 2}
-          cy={size / 2}
-        />
-        <circle
-          className="text-primary transition-all duration-500"
-          strokeWidth="4"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-          stroke="currentColor"
-          fill="transparent"
-          r={radius}
-          cx={size / 2}
-          cy={size / 2}
-        />
-      </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-foreground">
-        {progress}%
-      </span>
+    <div className="flex flex-col items-center justify-center py-16 gap-3">
+      <Loader2 className="w-6 h-6 text-primary animate-spin" />
+      {label && <p className="text-sm text-muted-foreground">{label}</p>}
     </div>
   );
 }
 
-function DeckCard({ deck }: { deck: (typeof flashcardDecks)[0] }) {
-  const progress = Math.round((deck.mastered / deck.cards) * 100);
-  
+function ErrorCard({ message }: { message: string }) {
   return (
-    <div className="p-5 rounded-xl border border-border bg-card hover:border-primary/30 transition-all cursor-pointer">
-      <div className="flex items-start justify-between mb-4">
-        <div
-          className={cn(
-            "flex items-center justify-center w-10 h-10 rounded-xl",
-            deck.color === "primary" && "bg-primary/10 text-primary",
-            deck.color === "green" && "bg-green-500/10 text-green-500",
-            deck.color === "yellow" && "bg-yellow-500/10 text-yellow-500",
-            deck.color === "red" && "bg-red-500/10 text-red-500"
-          )}
-        >
-          <Layers className="w-5 h-5" />
-        </div>
-        <ProgressRing progress={progress} />
+    <div className="flex items-center gap-3 p-4 rounded-xl border border-red-500/30 bg-red-500/5 text-sm text-red-400">
+      <AlertCircle className="w-4 h-4 shrink-0" />
+      {message}
+    </div>
+  );
+}
+
+// ─── Selection View ───────────────────────────────────────────
+
+function SelectionView({
+  onSelectModule,
+  onSelectLesson,
+}: {
+  onSelectModule: (id: string, label: string) => void;
+  onSelectLesson: (id: string, label: string) => void;
+}) {
+  const [modules, setModules] = useState<Module[] | null>(null);
+  const [lessonCache, setLessonCache] = useState<Record<string, Lesson[]>>({});
+  const [loadingLessonId, setLoadingLessonId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb) { setModules([]); return; }
+    sb.from("modules")
+      .select("*")
+      .eq("is_active", true)
+      .order("order_index")
+      .then(({ data, error: err }) => {
+        if (err) setError(err.message);
+        else setModules((data as Module[]) ?? []);
+      });
+  }, []);
+
+  const handleToggle = useCallback(
+    async (mod: Module) => {
+      if (expandedId === mod.id) { setExpandedId(null); return; }
+      setExpandedId(mod.id);
+      if (lessonCache[mod.id]) return;
+      setLoadingLessonId(mod.id);
+      const sb = getSupabase();
+      if (!sb) { setLoadingLessonId(null); return; }
+      const { data, error: err } = await sb
+        .from("lessons")
+        .select("id, module_id, title, order_index, estimated_duration_minutes, knowledge_level, is_active, version, created_at, updated_at, content, summary_content")
+        .eq("module_id", mod.id)
+        .eq("is_active", true)
+        .order("order_index");
+      setLoadingLessonId(null);
+      if (!err) {
+        setLessonCache((prev) => ({ ...prev, [mod.id]: (data as Lesson[]) ?? [] }));
+      }
+    },
+    [expandedId, lessonCache]
+  );
+
+  if (modules === null) return <LoadingSpinner label="Modüller yükleniyor…" />;
+  if (error) return <ErrorCard message={error} />;
+  if (modules.length === 0) {
+    return (
+      <div className="text-center py-16 rounded-xl border border-border bg-card">
+        <Layers className="w-10 h-10 mx-auto mb-3 text-muted-foreground opacity-30" />
+        <p className="font-medium text-foreground mb-1">Modül bulunamadı</p>
+        <p className="text-sm text-muted-foreground">Henüz aktif modül eklenmemiş.</p>
       </div>
-      <h3 className="font-semibold text-foreground mb-1">{deck.name}</h3>
-      <p className="text-sm text-muted-foreground">
-        {deck.mastered} / {deck.cards} cards mastered
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm font-medium text-muted-foreground mb-4">
+        Flashcard çalışmak istediğiniz modül veya dersi seçin:
       </p>
+      {modules.map((mod) => {
+        const title = mod.title.en;
+        const isExpanded = expandedId === mod.id;
+        const lessons = lessonCache[mod.id] ?? [];
+        const isLoadingLessons = loadingLessonId === mod.id;
+
+        return (
+          <div
+            key={mod.id}
+            className="rounded-xl border border-border bg-card overflow-hidden"
+          >
+            <div className="flex items-center gap-4 p-5">
+              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 shrink-0">
+                <GraduationCap className="w-5 h-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-foreground truncate">{title}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Tüm dersler · v{mod.version}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => onSelectModule(mod.id, title)}
+                  className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
+                >
+                  Tümünü çalış
+                </button>
+                <button
+                  onClick={() => handleToggle(mod)}
+                  className="p-1.5 rounded-lg hover:bg-secondary/50 transition-colors text-muted-foreground"
+                  aria-label="Dersleri göster"
+                >
+                  <ChevronDown
+                    className={cn(
+                      "w-4 h-4 transition-transform",
+                      isExpanded && "rotate-180"
+                    )}
+                  />
+                </button>
+              </div>
+            </div>
+
+            {isExpanded && (
+              <div className="border-t border-border">
+                {isLoadingLessons ? (
+                  <LoadingSpinner label="Dersler yükleniyor…" />
+                ) : lessons.length === 0 ? (
+                  <p className="px-5 py-4 text-sm text-muted-foreground">
+                    Bu modülde ders bulunamadı.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {lessons.map((lesson) => (
+                      <li key={lesson.id}>
+                        <button
+                          onClick={() =>
+                            onSelectLesson(lesson.id, lesson.title.en)
+                          }
+                          className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-secondary/30 transition-colors text-left group"
+                        >
+                          <BookOpen className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          <span className="text-sm text-foreground flex-1 truncate group-hover:text-primary transition-colors">
+                            {lesson.title.en}
+                          </span>
+                          {lesson.estimated_duration_minutes && (
+                            <span className="text-xs text-muted-foreground shrink-0">
+                              ~{lesson.estimated_duration_minutes} dk
+                            </span>
+                          )}
+                          <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-function FlashcardViewer() {
-  const [currentIndex, setCurrentIndex] = useState(0);
+// ─── Flashcard Viewer ─────────────────────────────────────────
+
+function FlashcardViewer({ cards }: { cards: Flashcard[] }) {
+  const [indices, setIndices] = useState(() => cards.map((_, i) => i));
+  const [currentIdx, setCurrentIdx] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
-  const [masteredCards, setMasteredCards] = useState<number[]>([]);
+  const [masteredIds, setMasteredIds] = useState<Set<string>>(new Set());
 
-  const currentCard = sampleCards[currentIndex];
+  const card = cards[indices[currentIdx]];
 
-  const handleNext = () => {
+  const go = (delta: 1 | -1) => {
     setIsFlipped(false);
-    setCurrentIndex((prev) => (prev + 1) % sampleCards.length);
+    setCurrentIdx((prev) =>
+      Math.max(0, Math.min(indices.length - 1, prev + delta))
+    );
   };
 
-  const handlePrev = () => {
+  const markMastered = () => {
+    if (card) setMasteredIds((prev) => new Set(prev).add(card.id));
+    go(1);
+  };
+
+  const shuffle = () => {
     setIsFlipped(false);
-    setCurrentIndex((prev) => (prev - 1 + sampleCards.length) % sampleCards.length);
+    setCurrentIdx(0);
+    setIndices((prev) => [...prev].sort(() => Math.random() - 0.5));
   };
 
-  const handleMastered = () => {
-    if (!masteredCards.includes(currentCard.id)) {
-      setMasteredCards([...masteredCards, currentCard.id]);
-    }
-    handleNext();
+  const reset = () => {
+    setIsFlipped(false);
+    setCurrentIdx(0);
+    setMasteredIds(new Set());
+    setIndices(cards.map((_, i) => i));
   };
 
-  const handleAgain = () => {
-    handleNext();
-  };
+  if (!card) return null;
 
   return (
-    <div className="mt-8">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-semibold text-foreground">Practice Session</h2>
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <BookOpen className="w-4 h-4" />
-            {currentIndex + 1} / {sampleCards.length}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Flame className="w-4 h-4 text-orange-500" />
-            {masteredCards.length} mastered
-          </span>
-        </div>
+    <div>
+      {/* Session info */}
+      <div className="flex items-center justify-between mb-4 text-sm text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <BookOpen className="w-4 h-4" />
+          {currentIdx + 1} / {indices.length}
+        </span>
+        <span className="flex items-center gap-1.5">
+          <Flame className="w-4 h-4 text-orange-500" />
+          {masteredIds.size} öğrenildi
+        </span>
       </div>
 
-      {/* Flashcard */}
+      {/* Card face */}
       <div
-        onClick={() => setIsFlipped(!isFlipped)}
-        className="relative min-h-[320px] rounded-2xl border border-border bg-card cursor-pointer perspective-1000"
+        onClick={() => setIsFlipped((f) => !f)}
+        className="relative min-h-[280px] rounded-2xl border border-border bg-card cursor-pointer select-none"
       >
+        {/* Front */}
         <div
           className={cn(
-            "absolute inset-0 p-8 flex flex-col transition-all duration-500 backface-hidden rounded-2xl",
-            isFlipped && "rotate-y-180 opacity-0"
+            "absolute inset-0 p-8 flex flex-col rounded-2xl transition-opacity duration-200",
+            isFlipped ? "opacity-0 pointer-events-none" : "opacity-100"
           )}
         >
-          <span className="text-xs font-medium text-primary mb-4">{currentCard.module}</span>
+          {card.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-4">
+              {card.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
           <p className="text-xl font-medium text-foreground leading-relaxed flex-1 flex items-center">
-            {currentCard.question}
+            {card.front.en}
           </p>
-          <p className="text-sm text-muted-foreground mt-4 text-center">
-            Click to reveal answer
+          <p className="text-sm text-muted-foreground text-center mt-4">
+            Cevabı görmek için tıklayın
           </p>
         </div>
+
+        {/* Back */}
         <div
           className={cn(
-            "absolute inset-0 p-8 flex flex-col transition-all duration-500 backface-hidden rounded-2xl bg-primary/5",
-            !isFlipped && "-rotate-y-180 opacity-0"
+            "absolute inset-0 p-8 flex flex-col rounded-2xl bg-primary/5 transition-opacity duration-200",
+            !isFlipped ? "opacity-0 pointer-events-none" : "opacity-100"
           )}
         >
-          <span className="text-xs font-medium text-green-500 mb-4">Answer</span>
+          <span className="text-xs font-medium text-green-500 mb-4">Cevap</span>
           <p className="text-lg text-foreground leading-relaxed flex-1">
-            {currentCard.answer}
+            {card.back.en}
           </p>
         </div>
       </div>
 
       {/* Controls */}
-      <div className="flex items-center justify-between mt-6">
+      <div className="flex items-center justify-between mt-5">
         <button
-          onClick={handlePrev}
-          className="p-3 rounded-xl border border-border bg-card hover:bg-secondary/50 transition-colors"
+          onClick={() => go(-1)}
+          disabled={currentIdx === 0}
+          className="p-3 rounded-xl border border-border bg-card hover:bg-secondary/50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <ChevronLeft className="w-5 h-5 text-foreground" />
         </button>
 
         <div className="flex items-center gap-3">
           <button
-            onClick={handleAgain}
+            onClick={() => go(1)}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border bg-card hover:bg-secondary/50 transition-colors text-sm font-medium text-foreground"
           >
             <XCircle className="w-4 h-4 text-red-500" />
-            Again
+            Tekrar
           </button>
           <button
-            onClick={handleMastered}
+            onClick={markMastered}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary/90 transition-colors text-sm font-medium text-primary-foreground"
           >
             <CheckCircle2 className="w-4 h-4" />
-            Mastered
+            Öğrendim
           </button>
         </div>
 
         <button
-          onClick={handleNext}
-          className="p-3 rounded-xl border border-border bg-card hover:bg-secondary/50 transition-colors"
+          onClick={() => go(1)}
+          disabled={currentIdx >= indices.length - 1}
+          className="p-3 rounded-xl border border-border bg-card hover:bg-secondary/50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <ChevronRight className="w-5 h-5 text-foreground" />
         </button>
       </div>
 
-      {/* Quick Actions */}
-      <div className="flex items-center justify-center gap-4 mt-6">
-        <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+      {/* Quick actions */}
+      <div className="flex items-center justify-center gap-6 mt-5">
+        <button
+          onClick={shuffle}
+          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
           <Shuffle className="w-4 h-4" />
-          Shuffle
+          Karıştır
         </button>
-        <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <button
+          onClick={reset}
+          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
           <RotateCcw className="w-4 h-4" />
-          Reset Progress
+          Sıfırla
         </button>
       </div>
     </div>
   );
 }
 
-export default function FlashcardsPage() {
+// ─── Study View (active filter) ───────────────────────────────
+
+function StudyView({
+  moduleId,
+  lessonId,
+  filterLabel,
+  onClearFilter,
+}: {
+  moduleId: string | null;
+  lessonId: string | null;
+  filterLabel: string;
+  onClearFilter: () => void;
+}) {
+  const [cards, setCards] = useState<Flashcard[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setCards(null);
+    setError(null);
+    const sb = getSupabase();
+    if (!sb) { setCards([]); return; }
+
+    let query = sb.from("flashcards").select("*").eq("is_active", true);
+    if (lessonId) query = query.eq("lesson_id", lessonId);
+    else if (moduleId) query = query.eq("module_id", moduleId);
+
+    query.then(({ data, error: err }) => {
+      if (err) setError(err.message);
+      else setCards((data as Flashcard[]) ?? []);
+    });
+  }, [moduleId, lessonId]);
+
+  if (error) return <ErrorCard message={error} />;
+  if (cards === null) return <LoadingSpinner label="Kartlar yükleniyor…" />;
+
+  return (
+    <div>
+      {/* Filter badge */}
+      <div className="flex items-center justify-between p-4 mb-6 rounded-xl border border-border bg-card">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <Layers className="w-4 h-4 text-primary shrink-0" />
+          <span className="text-sm font-medium text-foreground truncate">
+            {filterLabel || "Yükleniyor…"}
+          </span>
+          <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium shrink-0">
+            {cards.length} kart
+          </span>
+        </div>
+        <button
+          onClick={onClearFilter}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0 ml-4"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Değiştir
+        </button>
+      </div>
+
+      {cards.length === 0 ? (
+        <div className="text-center py-16 rounded-xl border border-border bg-card">
+          <Layers className="w-10 h-10 mx-auto mb-3 text-muted-foreground opacity-30" />
+          <p className="font-medium text-foreground mb-1">Kart bulunamadı</p>
+          <p className="text-sm text-muted-foreground">
+            Bu filtre için henüz flashcard eklenmemiş.
+          </p>
+        </div>
+      ) : (
+        <FlashcardViewer cards={cards} />
+      )}
+    </div>
+  );
+}
+
+// ─── Main content (wrapped in Suspense for useSearchParams) ───
+
+function FlashcardsContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const moduleId = searchParams.get("moduleId");
+  const lessonId = searchParams.get("lessonId");
+  const hasFilter = Boolean(moduleId || lessonId);
+
+  const [filterLabel, setFilterLabel] = useState<string>("");
+
+  useEffect(() => {
+    if (!hasFilter) { setFilterLabel(""); return; }
+    const sb = getSupabase();
+    if (!sb) {
+      setFilterLabel(lessonId ? "Ders" : "Modül");
+      return;
+    }
+    if (lessonId) {
+      sb.from("lessons")
+        .select("title")
+        .eq("id", lessonId)
+        .single()
+        .then(({ data }) => {
+          setFilterLabel(
+            data ? (data as { title: { en: string } }).title.en : "Ders"
+          );
+        });
+    } else if (moduleId) {
+      sb.from("modules")
+        .select("title")
+        .eq("id", moduleId)
+        .single()
+        .then(({ data }) => {
+          setFilterLabel(
+            data ? (data as { title: { en: string } }).title.en : "Modül"
+          );
+        });
+    }
+  }, [moduleId, lessonId, hasFilter]);
+
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto px-6 py-8">
@@ -243,45 +478,54 @@ export default function FlashcardsPage() {
         <div className="mb-8">
           <div className="flex items-center gap-2 text-xs font-medium text-primary mb-3">
             <Layers className="w-4 h-4" />
-            Spaced Repetition
+            Aralıklı Tekrar
           </div>
           <h1 className="text-2xl font-semibold text-foreground tracking-tight">
-            Flashcard Decks
+            Flashcard Destesi
           </h1>
           <p className="text-muted-foreground mt-1">
-            Master key concepts with active recall
+            {hasFilter
+              ? filterLabel || "Yükleniyor…"
+              : "Çalışmak istediğiniz modül veya dersi seçin"}
           </p>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          <div className="p-4 rounded-xl border border-border bg-card text-center">
-            <p className="text-2xl font-bold text-foreground">176</p>
-            <p className="text-xs text-muted-foreground mt-1">Total Cards</p>
-          </div>
-          <div className="p-4 rounded-xl border border-border bg-card text-center">
-            <p className="text-2xl font-bold text-green-500">55</p>
-            <p className="text-xs text-muted-foreground mt-1">Mastered</p>
-          </div>
-          <div className="p-4 rounded-xl border border-border bg-card text-center">
-            <div className="flex items-center justify-center gap-1.5">
-              <Clock className="w-4 h-4 text-primary" />
-              <p className="text-2xl font-bold text-foreground">24</p>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Due Today</p>
-          </div>
-        </div>
-
-        {/* Decks Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-          {flashcardDecks.map((deck) => (
-            <DeckCard key={deck.id} deck={deck} />
-          ))}
-        </div>
-
-        {/* Flashcard Viewer */}
-        <FlashcardViewer />
+        {hasFilter ? (
+          <StudyView
+            moduleId={moduleId}
+            lessonId={lessonId}
+            filterLabel={filterLabel}
+            onClearFilter={() => router.push("/flashcards")}
+          />
+        ) : (
+          <SelectionView
+            onSelectModule={(id, label) => {
+              setFilterLabel(label);
+              router.push(`/flashcards?moduleId=${id}`);
+            }}
+            onSelectLesson={(id, label) => {
+              setFilterLabel(label);
+              router.push(`/flashcards?lessonId=${id}`);
+            }}
+          />
+        )}
       </div>
     </div>
+  );
+}
+
+// ─── Page export ──────────────────────────────────────────────
+
+export default function FlashcardsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <Loader2 className="w-6 h-6 text-primary animate-spin" />
+        </div>
+      }
+    >
+      <FlashcardsContent />
+    </Suspense>
   );
 }
