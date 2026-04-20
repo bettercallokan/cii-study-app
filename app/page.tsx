@@ -2,8 +2,6 @@
 
 import Link from "next/link";
 import {
-  BookOpen,
-  Layers,
   ArrowRight,
   TrendingUp,
   TrendingDown,
@@ -11,6 +9,9 @@ import {
   Target,
   Zap,
   ChevronRight,
+  FileText,
+  Lightbulb,
+  Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -32,23 +33,6 @@ const knowledgeGaps = [
   { topic: "Policy Interpretation", progress: 58, trend: "down" },
   { topic: "Claims Procedures", progress: 45, trend: "neutral" },
   { topic: "Regulatory Framework", progress: 38, trend: "up" },
-];
-
-const quickActions = [
-  {
-    title: "Module Summaries",
-    description: "Quick review of key concepts",
-    icon: BookOpen,
-    href: "/modules",
-    color: "primary",
-  },
-  {
-    title: "Flashcard Deck",
-    description: "234 cards ready for review",
-    icon: Layers,
-    href: "/flashcards",
-    color: "success",
-  },
 ];
 
 const recentActivity = [
@@ -178,43 +162,66 @@ function KnowledgeGapCard() {
   );
 }
 
-function QuickActionsGrid() {
+const studyTools = [
+  {
+    icon: FileText,
+    title: "Module Summaries",
+    description: "Condensed overviews of key concepts and principles",
+    badge: "12 SUMMARIES",
+    href: "/modules",
+  },
+  {
+    icon: Lightbulb,
+    title: "Critical Insights",
+    description: "Essential information and exam-critical points",
+    badge: "48 INSIGHTS",
+    href: "/modules",
+  },
+  {
+    icon: Layers,
+    title: "Flashcard Deck",
+    description: "Interactive cards for rapid knowledge retention",
+    badge: "320 CARDS",
+    href: "/flashcards",
+  },
+];
+
+function QuickStudyTools() {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {quickActions.map((action) => (
-        <Link
-          key={action.title}
-          href={action.href}
-          className="group p-5 rounded-xl border border-border bg-card hover:border-primary/30 hover:bg-primary/5 transition-all duration-200"
-        >
-          <div className="flex items-start gap-4">
-            <div
-              className={cn(
-                "flex items-center justify-center w-11 h-11 rounded-xl shrink-0",
-                action.color === "primary"
-                  ? "bg-primary/10 border border-primary/20"
-                  : "bg-green-500/10 border border-green-500/20"
-              )}
-            >
-              <action.icon
-                className={cn(
-                  "w-5 h-5",
-                  action.color === "primary" ? "text-primary" : "text-green-500"
-                )}
-              />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                {action.title}
+    <div>
+      <h2 className="text-sm font-medium text-muted-foreground mb-3">
+        Quick Study Tools
+      </h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {studyTools.map((tool) => (
+          <Link
+            key={tool.title}
+            href={tool.href}
+            className="group flex flex-col rounded-xl border border-border bg-card hover:border-emerald-500/30 hover:bg-emerald-500/5 transition-all duration-200 overflow-hidden"
+          >
+            {/* Top section */}
+            <div className="p-5 flex-1">
+              <div className="flex items-center justify-center w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 mb-4">
+                <tool.icon className="w-5 h-5 text-emerald-400" />
+              </div>
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-400 transition-colors mb-1.5">
+                {tool.title}
               </h3>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                {action.description}
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {tool.description}
               </p>
             </div>
-            <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
-          </div>
-        </Link>
-      ))}
+
+            {/* Bottom bar */}
+            <div className="px-5 py-3 border-t border-border flex items-center justify-between">
+              <span className="text-xs font-semibold tracking-wider text-emerald-400">
+                {tool.badge}
+              </span>
+              <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-emerald-400 group-hover:translate-x-0.5 transition-all duration-200" />
+            </div>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }
@@ -259,12 +266,6 @@ export default function DashboardPage() {
               <ContinueLearningCard />
             </div>
 
-            <div>
-              <h2 className="text-sm font-medium text-muted-foreground mb-3">
-                Quick Actions
-              </h2>
-              <QuickActionsGrid />
-            </div>
           </div>
 
           {/* Right Column - 1/3 width */}
@@ -272,6 +273,11 @@ export default function DashboardPage() {
             <KnowledgeGapCard />
             <RecentActivityCard />
           </div>
+        </div>
+
+        {/* Full-width Quick Study Tools */}
+        <div className="mt-6">
+          <QuickStudyTools />
         </div>
       </div>
     </div>
