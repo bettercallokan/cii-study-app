@@ -117,8 +117,8 @@ export default function StudyModePage({
   if (!course) notFound();
 
   const searchParams = useSearchParams();
-  // ?file= yoksa kursa ait varsayılan PDF'i yükle (ör. wce-study-text.pdf)
-  const effectivePath = searchParams.get("file") ?? `${code}-study-text.pdf`;
+  // ?file= yoksa klasör/dosya yapısına göre varsayılan PDF'i yükle
+  const effectivePath = searchParams.get("file") ?? `${code}/${code}-study-text.pdf`;
 
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
