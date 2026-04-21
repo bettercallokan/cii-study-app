@@ -256,11 +256,11 @@ export function AppSidebar() {
             {storageLoading ? (
               <div className="flex items-center gap-2 px-3 py-2 text-muted-foreground">
                 <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-                <span className="text-xs">Yükleniyor…</span>
+                <span className="text-xs">Loading…</span>
               </div>
             ) : pdfFiles.length === 0 ? (
               <p className="px-3 py-2 text-xs text-muted-foreground/60">
-                PDF bulunamadı
+                No PDFs found
               </p>
             ) : (
               <div className="space-y-0.5">

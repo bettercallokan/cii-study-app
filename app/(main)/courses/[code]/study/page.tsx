@@ -140,7 +140,7 @@ export default function StudyModePage({
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error || !data?.signedUrl) {
-          setPdfError("Bu PDF yüklenemedi. Lütfen tekrar deneyin.");
+          setPdfError("This PDF could not be loaded. Please try again.");
         } else {
           setPdfUrl(data.signedUrl + "#page=1");
         }

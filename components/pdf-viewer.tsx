@@ -1,11 +1,14 @@
 "use client";
 
+import { useState, useRef } from "react";
 import {
   Download,
   FileText,
   Loader2,
   AlertCircle,
   BookOpen,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -24,14 +27,39 @@ export function PdfViewer({
   pdfError,
   className,
 }: PdfViewerProps) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  // Strip existing fragment; we control #page= ourselves
+  const baseUrl = pdfUrl?.replace(/#.*$/, "") ?? null;
+  const iframeSrc = baseUrl ? `${baseUrl}#page=${currentPage}` : null;
+
+  const goTo = (page: number) => {
+    const next = Math.max(1, page);
+    setCurrentPage(next);
+    // Update src directly so the browser can reuse its cache entry
+    if (iframeRef.current && baseUrl) {
+      iframeRef.current.src = `${baseUrl}#page=${next}`;
+    }
+  };
+
+  // Reset page counter whenever a new PDF is loaded
+  const prevUrl = useRef<string | null>(null);
+  if (baseUrl !== prevUrl.current) {
+    prevUrl.current = baseUrl;
+    if (currentPage !== 1) setCurrentPage(1);
+  }
+
   const handleDownload = () => {
-    if (!pdfUrl) return;
+    if (!baseUrl) return;
     const a = document.createElement("a");
-    a.href = pdfUrl;
+    a.href = baseUrl;
     a.download = pdfName + ".pdf";
     a.target = "_blank";
     a.click();
   };
+
+  const showNav = !pdfLoading && !pdfError && !!pdfUrl;
 
   return (
     <div
@@ -62,17 +90,15 @@ export function PdfViewer({
         )}
       </div>
 
-      {/* Content area */}
+      {/* PDF area */}
       <div className="flex-1 overflow-hidden relative bg-secondary/30">
-        {/* Loading */}
         {pdfLoading && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
             <Loader2 className="w-6 h-6 text-primary animate-spin" />
-            <p className="text-sm text-muted-foreground">PDF yükleniyor…</p>
+            <p className="text-sm text-muted-foreground">Loading PDF…</p>
           </div>
         )}
 
-        {/* Error */}
         {!pdfLoading && pdfError && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
             <AlertCircle className="w-6 h-6 text-destructive" />
@@ -80,33 +106,55 @@ export function PdfViewer({
           </div>
         )}
 
-        {/* Empty — no file selected */}
         {!pdfLoading && !pdfError && !pdfUrl && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
             <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-muted">
               <BookOpen className="w-8 h-8 text-muted-foreground" />
             </div>
             <div className="space-y-1">
-              <p className="text-sm font-medium text-foreground">
-                PDF seçilmedi
-              </p>
+              <p className="text-sm font-medium text-foreground">No PDF selected</p>
               <p className="text-xs text-muted-foreground">
-                Sol panelden bir PDF dosyası seçin.
+                Select a PDF file from the left panel.
               </p>
             </div>
           </div>
         )}
 
-        {/* PDF iframe */}
-        {!pdfLoading && !pdfError && pdfUrl && (
+        {iframeSrc && (
           <iframe
-            key={pdfUrl}
-            src={pdfUrl}
+            ref={iframeRef}
+            src={iframeSrc}
             className="w-full h-full border-none"
             title={pdfName}
           />
         )}
       </div>
+
+      {/* Page navigation — large touch targets for mobile */}
+      {showNav && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-border bg-card shrink-0">
+          <button
+            onClick={() => goTo(currentPage - 1)}
+            disabled={currentPage <= 1}
+            className="flex items-center justify-center gap-1.5 flex-1 h-11 rounded-xl bg-secondary text-sm font-medium text-foreground hover:bg-secondary/70 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            <ChevronLeft className="w-5 h-5" />
+            Previous
+          </button>
+
+          <span className="text-sm font-medium text-muted-foreground tabular-nums whitespace-nowrap">
+            Page {currentPage}
+          </span>
+
+          <button
+            onClick={() => goTo(currentPage + 1)}
+            className="flex items-center justify-center gap-1.5 flex-1 h-11 rounded-xl bg-secondary text-sm font-medium text-foreground hover:bg-secondary/70 active:scale-95 transition-all"
+          >
+            Next
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
