@@ -22,16 +22,9 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/utils/supabase/client";
 
 interface PdfFile {
-  folder: string;    // "w01"
   name: string;      // "w01-study-text.pdf"
+  courseCode: string; // "w01"
   label: string;     // "W01 Study Text"
-}
-
-interface PdfFolder {
-  name: string;
-  files: PdfFile[];
-  isOpen: boolean;
-  loaded: boolean;
 }
 
 const modules = [
@@ -52,73 +45,35 @@ export function AppSidebar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   // Supabase Storage PDF listing
-  const [pdfFolders, setPdfFolders] = useState<PdfFolder[]>([]);
+  const [pdfFiles, setPdfFiles] = useState<PdfFile[]>([]);
   const [storageLoading, setStorageLoading] = useState(true);
 
   useEffect(() => {
     supabase.storage
       .from("pdfs")
-      .list("", { limit: 50, sortBy: { column: "name", order: "asc" } })
+      .list("", { limit: 100, sortBy: { column: "name", order: "asc" } })
       .then(({ data }) => {
         if (data) {
-          // id === null olanlar klasördür
-          setPdfFolders(
+          setPdfFiles(
             data
-              .filter((item) => item.id === null)
-              .map((item) => ({
-                name: item.name,
-                files: [],
-                isOpen: false,
-                loaded: false,
-              }))
+              .filter((item) => item.name.toLowerCase().endsWith(".pdf"))
+              .map((item) => {
+                const nameWithoutExt = item.name.replace(/\.pdf$/i, "");
+                const courseCode = nameWithoutExt.split("-")[0].toLowerCase();
+                const label = nameWithoutExt
+                  .replace(/-/g, " ")
+                  .replace(/\b\w/g, (c) => c.toUpperCase());
+                return { name: item.name, courseCode, label };
+              })
           );
         }
         setStorageLoading(false);
       });
   }, []);
 
-  const toggleFolder = async (folderName: string) => {
-    const folder = pdfFolders.find((f) => f.name === folderName);
-    if (!folder) return;
-
-    if (!folder.loaded) {
-      const { data } = await supabase.storage
-        .from("pdfs")
-        .list(folderName, { limit: 100, sortBy: { column: "name", order: "asc" } });
-      setPdfFolders((prev) =>
-        prev.map((f) =>
-          f.name === folderName
-            ? {
-                ...f,
-                isOpen: true,
-                loaded: true,
-                files: (data ?? [])
-                  .filter((item) => item.name.toLowerCase().endsWith(".pdf"))
-                  .map((item) => ({
-                    folder: folderName,
-                    name: item.name,
-                    label: item.name
-                      .replace(/\.pdf$/i, "")
-                      .replace(/-/g, " ")
-                      .replace(/\b\w/g, (c) => c.toUpperCase()),
-                  })),
-              }
-            : f
-        )
-      );
-    } else {
-      setPdfFolders((prev) =>
-        prev.map((f) =>
-          f.name === folderName ? { ...f, isOpen: !f.isOpen } : f
-        )
-      );
-    }
-  };
-
   const openPdf = (file: PdfFile) => {
-    const filePath = `${file.folder}/${file.name}`;
     router.push(
-      `/courses/${file.folder}/study?file=${encodeURIComponent(filePath)}`
+      `/courses/${file.courseCode}/study?file=${encodeURIComponent(file.name)}`
     );
   };
 
@@ -303,60 +258,36 @@ export function AppSidebar() {
                 <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
                 <span className="text-xs">Yükleniyor…</span>
               </div>
-            ) : pdfFolders.length === 0 ? (
+            ) : pdfFiles.length === 0 ? (
               <p className="px-3 py-2 text-xs text-muted-foreground/60">
-                Klasör bulunamadı
+                PDF bulunamadı
               </p>
             ) : (
               <div className="space-y-0.5">
-                {pdfFolders.map((folder) => (
-                  <div key={folder.name}>
+                {pdfFiles.map((file) => {
+                  const isActive =
+                    pathname.includes(`/courses/${file.courseCode}/study`) &&
+                    typeof window !== "undefined" &&
+                    new URLSearchParams(window.location.search).get("file") === file.name;
+                  return (
                     <button
-                      onClick={() => toggleFolder(folder.name)}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                      key={file.name}
+                      onClick={() => openPdf(file)}
+                      className={cn(
+                        "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors",
+                        isActive
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                      )}
                     >
-                      <BookOpen className="w-[18px] h-[18px] shrink-0" />
-                      <span className="flex-1 text-xs font-medium uppercase tracking-wide truncate">
-                        {folder.name}
-                      </span>
-                      <ChevronDown className={cn(
-                        "w-3.5 h-3.5 shrink-0 transition-transform",
-                        folder.isOpen && "rotate-180"
+                      <FileText className={cn(
+                        "w-[18px] h-[18px] shrink-0",
+                        isActive ? "text-primary" : "text-muted-foreground"
                       )} />
+                      <span className="text-xs truncate">{file.label}</span>
                     </button>
-
-                    {folder.isOpen && (
-                      <div className="ml-4 pl-3 border-l border-border/50 mt-0.5 mb-1 space-y-0.5">
-                        {folder.files.length === 0 ? (
-                          <p className="py-1.5 px-2 text-[11px] text-muted-foreground/50">
-                            PDF bulunamadı
-                          </p>
-                        ) : folder.files.map((file) => {
-                          const filePath = `${file.folder}/${file.name}`;
-                          const isActive =
-                            pathname.includes(`/courses/${file.folder}/study`) &&
-                            typeof window !== "undefined" &&
-                            new URLSearchParams(window.location.search).get("file") === filePath;
-                          return (
-                            <button
-                              key={file.name}
-                              onClick={() => openPdf(file)}
-                              className={cn(
-                                "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left transition-colors",
-                                isActive
-                                  ? "bg-primary/10 text-primary"
-                                  : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                              )}
-                            >
-                              <FileText className="w-3.5 h-3.5 shrink-0" />
-                              <span className="text-[11px] truncate">{file.label}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
