@@ -1,7 +1,8 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { notFound } from "next/navigation";
 import {
   ChevronLeft,
@@ -15,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { PdfViewer } from "@/components/pdf-viewer";
 import { AiChat } from "@/components/ai-chat";
+import { supabase } from "@/utils/supabase/client";
 
 // Course data (shared with main course page)
 const courseData = {
@@ -112,8 +114,41 @@ export default function StudyModePage({
 }) {
   const { code } = use(params);
   const course = courseData[code as CourseCode];
-  
   if (!course) notFound();
+
+  const searchParams = useSearchParams();
+  const filePath = searchParams.get("file");
+
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!filePath) {
+      setPdfUrl(null);
+      setPdfError(null);
+      return;
+    }
+    let cancelled = false;
+    setPdfLoading(true);
+    setPdfError(null);
+    setPdfUrl(null);
+
+    supabase.storage
+      .from("pdfs")
+      .createSignedUrl(filePath, 3600)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data?.signedUrl) {
+          setPdfError("Bu PDF yüklenemedi. Lütfen tekrar deneyin.");
+        } else {
+          setPdfUrl(data.signedUrl + "#page=1");
+        }
+        setPdfLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [filePath]);
 
   const [isChatOpen, setIsChatOpen] = useState(true);
   const [activeUnit, setActiveUnit] = useState(1);
@@ -154,7 +189,9 @@ export default function StudyModePage({
     });
   };
 
-  const pdfName = `${course.code} Study Guide - Unit ${activeUnit}: ${currentSection?.title || ""}`;
+  const pdfName = filePath
+    ? filePath.split("/").pop()?.replace(/\.pdf$/i, "") ?? filePath
+    : `${course.code} – Unit ${activeUnit}: ${currentSection?.title ?? ""}`;
   const isComplete = completedSections.has(`${activeUnit}-${activeSection}`);
 
   return (
@@ -347,7 +384,13 @@ export default function StudyModePage({
               isChatOpen ? "lg:w-[70%]" : "w-full"
             )}
           >
-            <PdfViewer pdfName={pdfName} totalPages={42} className="h-full" />
+            <PdfViewer
+              pdfName={pdfName}
+              pdfUrl={pdfUrl}
+              pdfLoading={pdfLoading}
+              pdfError={pdfError ?? undefined}
+              className="h-full"
+            />
           </div>
 
           {/* AI Chat Panel - 30% */}

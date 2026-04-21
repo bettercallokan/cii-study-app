@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   BookOpen,
@@ -15,8 +15,19 @@ import {
   ChevronRight,
   Menu,
   X,
+  FileText,
+  Loader2,
+  FolderOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/utils/supabase/client";
+
+interface PdfFolder {
+  name: string;
+  files: string[];
+  isOpen: boolean;
+  loaded: boolean;
+}
 
 const modules = [
   { code: "W01", name: "Award in General Insurance", href: "/courses/w01" },
@@ -30,9 +41,73 @@ const navigation = [
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isModulesOpen, setIsModulesOpen] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  // Supabase Storage PDF listing
+  const [pdfFolders, setPdfFolders] = useState<PdfFolder[]>([]);
+  const [storageLoading, setStorageLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.storage
+      .from("pdfs")
+      .list("", { limit: 50, sortBy: { column: "name", order: "asc" } })
+      .then(({ data }) => {
+        if (data) {
+          setPdfFolders(
+            data
+              .filter((item) => item.id === null) // klasörler id === null
+              .map((item) => ({
+                name: item.name,
+                files: [],
+                isOpen: false,
+                loaded: false,
+              }))
+          );
+        }
+        setStorageLoading(false);
+      });
+  }, []);
+
+  const togglePdfFolder = async (folderName: string) => {
+    const folder = pdfFolders.find((f) => f.name === folderName);
+    if (!folder) return;
+
+    if (!folder.loaded) {
+      const { data } = await supabase.storage
+        .from("pdfs")
+        .list(folderName, { limit: 100, sortBy: { column: "name", order: "asc" } });
+      setPdfFolders((prev) =>
+        prev.map((f) =>
+          f.name === folderName
+            ? {
+                ...f,
+                files: (data ?? [])
+                  .filter((item) => item.name.toLowerCase().endsWith(".pdf"))
+                  .map((item) => item.name),
+                isOpen: true,
+                loaded: true,
+              }
+            : f
+        )
+      );
+    } else {
+      setPdfFolders((prev) =>
+        prev.map((f) =>
+          f.name === folderName ? { ...f, isOpen: !f.isOpen } : f
+        )
+      );
+    }
+  };
+
+  const openPdf = (folderName: string, fileName: string) => {
+    const filePath = `${folderName}/${fileName}`;
+    router.push(
+      `/courses/${folderName.toLowerCase()}/study?file=${encodeURIComponent(filePath)}`
+    );
+  };
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
@@ -202,6 +277,71 @@ export function AppSidebar() {
             </>
           )}
         </Link>
+
+        {/* Study PDFs — dynamic from Supabase Storage */}
+        {!isCollapsed && (
+          <div className="pt-3">
+            <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">
+              Study PDFs
+            </p>
+
+            {storageLoading ? (
+              <div className="flex items-center gap-2 px-3 py-2 text-muted-foreground">
+                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                <span className="text-xs">Yükleniyor…</span>
+              </div>
+            ) : pdfFolders.length === 0 ? (
+              <p className="px-3 py-2 text-xs text-muted-foreground/60">
+                Klasör bulunamadı
+              </p>
+            ) : (
+              <div className="space-y-0.5">
+                {pdfFolders.map((folder) => (
+                  <div key={folder.name}>
+                    <button
+                      onClick={() => togglePdfFolder(folder.name)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                    >
+                      <FolderOpen className="w-[18px] h-[18px] shrink-0" />
+                      <span className="flex-1 text-left truncate text-xs">
+                        {folder.name}
+                      </span>
+                      <ChevronDown
+                        className={cn(
+                          "w-3.5 h-3.5 shrink-0 transition-transform",
+                          folder.isOpen && "rotate-180"
+                        )}
+                      />
+                    </button>
+
+                    {folder.isOpen && (
+                      <div className="ml-4 pl-3 border-l border-border/50 mt-0.5 mb-1 space-y-0.5">
+                        {folder.files.length === 0 ? (
+                          <p className="py-1.5 px-2 text-[11px] text-muted-foreground/50">
+                            PDF bulunamadı
+                          </p>
+                        ) : (
+                          folder.files.map((file) => (
+                            <button
+                              key={file}
+                              onClick={() => openPdf(folder.name, file)}
+                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left transition-colors text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                            >
+                              <FileText className="w-3.5 h-3.5 shrink-0" />
+                              <span className="text-[11px] truncate">
+                                {file.replace(/\.pdf$/i, "")}
+                              </span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </nav>
 
       {/* Bottom Section */}
