@@ -1,6 +1,9 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { Document, Page, pdfjs } from "react-pdf";
+import "react-pdf/dist/Page/AnnotationLayer.css";
+import "react-pdf/dist/Page/TextLayer.css";
 import {
   Download,
   FileText,
@@ -11,6 +14,8 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface PdfViewerProps {
   pdfName?: string;
@@ -27,39 +32,46 @@ export function PdfViewer({
   pdfError,
   className,
 }: PdfViewerProps) {
+  const [numPages, setNumPages] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
 
-  // Strip existing fragment; we control #page= ourselves
-  const baseUrl = pdfUrl?.replace(/#.*$/, "") ?? null;
-  const iframeSrc = baseUrl ? `${baseUrl}#page=${currentPage}` : null;
+  // Strip fragment — react-pdf doesn't need #page=N
+  const fileUrl = pdfUrl?.replace(/#.*$/, "") ?? null;
+
+  useEffect(() => {
+    const update = () => {
+      if (containerRef.current) {
+        setContainerWidth(containerRef.current.clientWidth);
+      }
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    if (containerRef.current) ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  // Reset when a different PDF is loaded
+  useEffect(() => {
+    setCurrentPage(1);
+    setNumPages(0);
+  }, [fileUrl]);
 
   const goTo = (page: number) => {
-    const next = Math.max(1, page);
-    setCurrentPage(next);
-    // Update src directly so the browser can reuse its cache entry
-    if (iframeRef.current && baseUrl) {
-      iframeRef.current.src = `${baseUrl}#page=${next}`;
-    }
+    setCurrentPage(Math.min(Math.max(1, page), numPages || 1));
   };
 
-  // Reset page counter whenever a new PDF is loaded
-  const prevUrl = useRef<string | null>(null);
-  if (baseUrl !== prevUrl.current) {
-    prevUrl.current = baseUrl;
-    if (currentPage !== 1) setCurrentPage(1);
-  }
-
   const handleDownload = () => {
-    if (!baseUrl) return;
+    if (!fileUrl) return;
     const a = document.createElement("a");
-    a.href = baseUrl;
+    a.href = fileUrl;
     a.download = pdfName + ".pdf";
     a.target = "_blank";
     a.click();
   };
 
-  const showNav = !pdfLoading && !pdfError && !!pdfUrl;
+  const showNav = !pdfLoading && !pdfError && !!fileUrl && numPages > 0;
 
   return (
     <div
@@ -79,7 +91,7 @@ export function PdfViewer({
           </h2>
         </div>
 
-        {pdfUrl && (
+        {fileUrl && (
           <button
             onClick={handleDownload}
             className="p-1.5 rounded-md hover:bg-secondary transition-colors shrink-0"
@@ -91,7 +103,7 @@ export function PdfViewer({
       </div>
 
       {/* PDF area */}
-      <div className="flex-1 overflow-hidden relative bg-secondary/30">
+      <div ref={containerRef} className="flex-1 overflow-auto relative bg-secondary/30">
         {pdfLoading && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
             <Loader2 className="w-6 h-6 text-primary animate-spin" />
@@ -106,7 +118,7 @@ export function PdfViewer({
           </div>
         )}
 
-        {!pdfLoading && !pdfError && !pdfUrl && (
+        {!pdfLoading && !pdfError && !fileUrl && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
             <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-muted">
               <BookOpen className="w-8 h-8 text-muted-foreground" />
@@ -120,17 +132,35 @@ export function PdfViewer({
           </div>
         )}
 
-        {iframeSrc && (
-          <iframe
-            ref={iframeRef}
-            src={iframeSrc}
-            className="w-full h-full border-none"
-            title={pdfName}
-          />
+        {fileUrl && !pdfLoading && !pdfError && containerWidth > 0 && (
+          <Document
+            file={fileUrl}
+            onLoadSuccess={({ numPages }) => setNumPages(numPages)}
+            loading={
+              <div className="flex flex-col items-center justify-center gap-3 py-20">
+                <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                <p className="text-sm text-muted-foreground">Loading PDF…</p>
+              </div>
+            }
+            error={
+              <div className="flex flex-col items-center justify-center gap-3 py-20 px-6 text-center">
+                <AlertCircle className="w-6 h-6 text-destructive" />
+                <p className="text-sm text-destructive">Failed to load PDF.</p>
+              </div>
+            }
+            className="flex justify-center"
+          >
+            <Page
+              pageNumber={currentPage}
+              width={containerWidth}
+              renderTextLayer={true}
+              renderAnnotationLayer={false}
+            />
+          </Document>
         )}
       </div>
 
-      {/* Page navigation — large touch targets for mobile */}
+      {/* Page navigation */}
       {showNav && (
         <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-border bg-card shrink-0">
           <button
@@ -143,12 +173,13 @@ export function PdfViewer({
           </button>
 
           <span className="text-sm font-medium text-muted-foreground tabular-nums whitespace-nowrap">
-            Page {currentPage}
+            {currentPage} / {numPages}
           </span>
 
           <button
             onClick={() => goTo(currentPage + 1)}
-            className="flex items-center justify-center gap-1.5 flex-1 h-11 rounded-xl bg-secondary text-sm font-medium text-foreground hover:bg-secondary/70 active:scale-95 transition-all"
+            disabled={currentPage >= numPages}
+            className="flex items-center justify-center gap-1.5 flex-1 h-11 rounded-xl bg-secondary text-sm font-medium text-foreground hover:bg-secondary/70 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             Next
             <ChevronRight className="w-5 h-5" />
