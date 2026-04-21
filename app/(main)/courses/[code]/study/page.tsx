@@ -117,18 +117,19 @@ export default function StudyModePage({
   if (!course) notFound();
 
   const searchParams = useSearchParams();
-  const filePath = searchParams.get("file");
+  // ?file= yoksa kursa ait varsayılan PDF'i yükle (ör. wce-study-text.pdf)
+  const effectivePath = searchParams.get("file") ?? `${code}-study-text.pdf`;
 
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
 
+  // Scroll to top on mount so the header is always visible
   useEffect(() => {
-    if (!filePath) {
-      setPdfUrl(null);
-      setPdfError(null);
-      return;
-    }
+    window.scrollTo(0, 0);
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     setPdfLoading(true);
     setPdfError(null);
@@ -136,7 +137,7 @@ export default function StudyModePage({
 
     supabase.storage
       .from("pdfs")
-      .createSignedUrl(filePath, 3600)
+      .createSignedUrl(effectivePath, 3600)
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error || !data?.signedUrl) {
@@ -148,7 +149,7 @@ export default function StudyModePage({
       });
 
     return () => { cancelled = true; };
-  }, [filePath]);
+  }, [effectivePath]);
 
   const [isChatOpen, setIsChatOpen] = useState(true);
   const [activeUnit, setActiveUnit] = useState(1);
@@ -189,9 +190,8 @@ export default function StudyModePage({
     });
   };
 
-  const pdfName = filePath
-    ? filePath.split("/").pop()?.replace(/\.pdf$/i, "") ?? filePath
-    : `${course.code} – Unit ${activeUnit}: ${currentSection?.title ?? ""}`;
+  const pdfName = effectivePath
+    .split("/").pop()?.replace(/\.pdf$/i, "") ?? effectivePath;
   const isComplete = completedSections.has(`${activeUnit}-${activeSection}`);
 
   return (
