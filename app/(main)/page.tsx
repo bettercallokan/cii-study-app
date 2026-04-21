@@ -3,11 +3,13 @@
 import Link from "next/link";
 import {
   TrendingUp,
-  TrendingDown,
   Clock,
   Target,
   Zap,
   ChevronRight,
+  BookOpen,
+  ClipboardList,
+  ArrowRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -23,18 +25,21 @@ const currentModule = {
   lastAccessed: "2 hours ago",
 };
 
-const knowledgeGaps = [
-  { topic: "Insurance Law Principles", progress: 85, trend: "up" },
-  { topic: "Risk Classification", progress: 72, trend: "up" },
-  { topic: "Policy Interpretation", progress: 58, trend: "down" },
-  { topic: "Claims Procedures", progress: 45, trend: "neutral" },
-  { topic: "Regulatory Framework", progress: 38, trend: "up" },
+const modules = [
+  { code: "W01", name: "Award in General Insurance", progress: 45, href: "/courses/w01" },
+  { code: "WCE", name: "Insurance Claims Handling", progress: 12, href: "/courses/wce" },
+  { code: "WUE", name: "Insurance Underwriting", progress: 0, href: "/courses/wue" },
 ];
 
 const recentActivity = [
   { action: "Completed Unit 1", module: "Insurance Contract Law", time: "2h ago" },
   { action: "Reviewed 45 flashcards", module: "Risk Management", time: "5h ago" },
   { action: "Scored 78% on quiz", module: "Regulatory Framework", time: "1d ago" },
+];
+
+const upcomingExams = [
+  { name: "W01 Mock Exam 1", questions: 50, duration: "2 hours", status: "Not started" },
+  { name: "W01 Mock Exam 2", questions: 50, duration: "2 hours", status: "Not started" },
 ];
 
 function ProgressBar({ value, className }: { value: number; className?: string }) {
@@ -55,7 +60,7 @@ function WelcomeHeader() {
         Welcome back, <span className="text-primary">Mehmet</span>
       </h1>
       <p className="text-muted-foreground mt-1">
-        Continue your CII W01 preparation journey
+        Continue your CII certification journey
       </p>
 
       {/* Global Progress */}
@@ -112,13 +117,16 @@ function ContinueLearningCard() {
   );
 }
 
-function KnowledgeGapCard() {
+function ModulesOverviewCard() {
   return (
     <div className="rounded-xl border border-border bg-card p-5">
       <div className="flex items-center justify-between mb-5">
-        <h3 className="font-semibold text-foreground">Knowledge Gaps</h3>
+        <div className="flex items-center gap-2">
+          <BookOpen className="w-4 h-4 text-primary" />
+          <h3 className="font-semibold text-foreground">Your Modules</h3>
+        </div>
         <Link
-          href="/analytics"
+          href="/courses"
           className="text-xs text-primary hover:underline flex items-center gap-1"
         >
           View all
@@ -126,31 +134,74 @@ function KnowledgeGapCard() {
         </Link>
       </div>
       <div className="space-y-4">
-        {knowledgeGaps.map((item) => (
-          <div key={item.topic}>
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-sm text-foreground">{item.topic}</span>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-foreground">{item.progress}%</span>
-                {item.trend === "up" && (
-                  <TrendingUp className="w-3.5 h-3.5 text-green-500" />
-                )}
-                {item.trend === "down" && (
-                  <TrendingDown className="w-3.5 h-3.5 text-red-500" />
-                )}
-              </div>
+        {modules.map((module) => (
+          <Link 
+            key={module.code} 
+            href={module.href}
+            className="block group"
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <span className={cn(
+                "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                module.progress > 0 ? "bg-primary/20 text-primary" : "bg-secondary text-muted-foreground"
+              )}>
+                {module.code}
+              </span>
+              <span className="text-sm text-foreground group-hover:text-primary transition-colors flex-1 truncate">
+                {module.name}
+              </span>
+              <span className="text-xs font-medium text-muted-foreground">
+                {module.progress}%
+              </span>
             </div>
             <ProgressBar
-              value={item.progress}
+              value={module.progress}
               className={cn(
                 "h-1.5",
-                item.progress >= 70
-                  ? "[&>div]:bg-green-500"
-                  : item.progress >= 50
-                  ? "[&>div]:bg-yellow-500"
-                  : "[&>div]:bg-red-500"
+                module.progress === 0 && "[&>div]:bg-muted-foreground/30"
               )}
             />
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PracticeExamsCard() {
+  return (
+    <div className="rounded-xl border border-border bg-card p-5">
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-2">
+          <ClipboardList className="w-4 h-4 text-primary" />
+          <h3 className="font-semibold text-foreground">Practice Exams</h3>
+        </div>
+        <Link
+          href="/practice-exams"
+          className="text-xs text-primary hover:underline flex items-center gap-1"
+        >
+          View all
+          <ChevronRight className="w-3 h-3" />
+        </Link>
+      </div>
+      <div className="space-y-3">
+        {upcomingExams.map((exam, index) => (
+          <div
+            key={index}
+            className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors"
+          >
+            <div>
+              <p className="text-sm font-medium text-foreground">{exam.name}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {exam.questions} questions · {exam.duration}
+              </p>
+            </div>
+            <Link
+              href="/practice-exams"
+              className="p-2 rounded-lg hover:bg-secondary transition-colors"
+            >
+              <ArrowRight className="w-4 h-4 text-muted-foreground" />
+            </Link>
           </div>
         ))}
       </div>
@@ -161,7 +212,10 @@ function KnowledgeGapCard() {
 function RecentActivityCard() {
   return (
     <div className="rounded-xl border border-border bg-card p-5">
-      <h3 className="font-semibold text-foreground mb-4">Recent Activity</h3>
+      <div className="flex items-center gap-2 mb-4">
+        <TrendingUp className="w-4 h-4 text-primary" />
+        <h3 className="font-semibold text-foreground">Recent Activity</h3>
+      </div>
       <div className="space-y-3">
         {recentActivity.map((item, index) => (
           <div
@@ -184,7 +238,7 @@ function RecentActivityCard() {
 export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 lg:pl-8">
         <WelcomeHeader />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -197,16 +251,15 @@ export default function DashboardPage() {
               </h2>
               <ContinueLearningCard />
             </div>
-
+            <ModulesOverviewCard />
           </div>
 
           {/* Right Column - 1/3 width */}
           <div className="space-y-6">
-            <KnowledgeGapCard />
+            <PracticeExamsCard />
             <RecentActivityCard />
           </div>
         </div>
-
       </div>
     </div>
   );

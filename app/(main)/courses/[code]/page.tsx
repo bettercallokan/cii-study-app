@@ -16,6 +16,7 @@ import {
   BookMarked,
   Scale,
   ShieldCheck,
+  PanelRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -449,7 +450,7 @@ function CourseSidebar({
   );
 }
 
-// ─── Tab Bar ──────────────────────────────────────────────────
+// ─── Tab Bar ───────���──────────────────────────────────────────
 
 function TabBar({
   activeTab,
@@ -830,18 +831,28 @@ export default function CourseDetailPage({
     <div className="min-h-screen bg-background">
       {/* Sticky header */}
       <header className="border-b border-border bg-card/80 backdrop-blur-xl sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-3.5 flex items-center gap-3">
+        <div className="max-w-7xl mx-auto px-6 py-3.5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/courses"
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors group"
+            >
+              <ChevronLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
+              Courses
+            </Link>
+            <span className="text-border select-none">/</span>
+            <span className="text-sm font-medium text-foreground truncate">
+              {course.code} · {course.title}
+            </span>
+          </div>
           <Link
-            href="/courses"
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors group"
+            href={`/courses/${code}/study`}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
           >
-            <ChevronLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-            Courses
+            <PanelRight className="w-4 h-4" />
+            <span className="hidden sm:inline">Enter Study Mode</span>
+            <span className="sm:hidden">Study</span>
           </Link>
-          <span className="text-border select-none">/</span>
-          <span className="text-sm font-medium text-foreground truncate">
-            {course.code} · {course.title}
-          </span>
         </div>
       </header>
 
