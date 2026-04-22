@@ -28,7 +28,7 @@ Modules (expandable) → W01 `/courses/w01`, WCE `/courses/wce`, WUE `/courses/w
 Practice Exams → `/practice-exams`  
 STUDY PDFS (flat file list from Supabase Storage `pdfs` bucket)  
 Settings → `/settings`  
-**NOT in sidebar:** Flashcards, Analytics, Courses (standalone link)
+**NOT in sidebar:** Analytics, Courses (standalone link)
 
 ### Route Structure
 This app uses a `(main)` route group:
@@ -45,8 +45,6 @@ app/
           page.tsx    ← /courses/w01/study
     practice-exams/
       page.tsx
-    flashcards/
-      page.tsx
     analytics/
       page.tsx
     settings/
@@ -62,7 +60,7 @@ app/
 2. **Accidental file overwrite**: A task like "add feature X to sidebar" rewrites the whole file from scratch instead of editing the existing one.
    - **Fix**: Always `Read` a file before editing it. Use `Edit` (targeted diff) not `Write` (full overwrite) for existing files.
 
-3. **Wrong base commit**: A new Claude session starts from an unrelated/older branch (e.g. `6a5909e`) instead of the correct working branch (`claude/supabase-storage-integration-dkEHK` at `1d3b577`).
+3. **Wrong base commit**: A new Claude session starts from an unrelated/older branch instead of the correct working branch (`main`).
    - **Fix**: Always check all remote branches with `git branch -av` and identify the most advanced working state before starting work.
 
 4. **PR merge conflict resolved wrong**: During a merge, the "ours" version (old) wins over "theirs" (new design).
@@ -85,7 +83,6 @@ CII Study App — a Next.js 15 / Supabase study platform for CII (Chartered Insu
 ### Key tables
 - **modules** — `id, title (JSONB {en, tr}), order_index, is_active, version`
 - **lessons** — `id, module_id, title (JSONB {en, tr}), content (JSONB), summary_content (JSONB), knowledge_level, order_index`
-- **flashcards** — `id, module_id, lesson_id, front (JSONB {en, tr?}), back (JSONB {en, tr?}), tags`
 - **questions** — for practice exams
 - **profiles** — user profiles with `preferred_language`, `is_admin`
 

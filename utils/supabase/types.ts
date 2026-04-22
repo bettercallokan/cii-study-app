@@ -24,18 +24,6 @@ export type Lesson = {
   updated_at: string;
 };
 
-export type Flashcard = {
-  id: string;
-  module_id: string | null;
-  lesson_id: string | null;
-  front: { en: string; tr?: string };
-  back: { en: string; tr?: string };
-  tags: string[];
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-};
-
 export type Quiz = {
   id: string;
   title: { en: string; tr?: string };
