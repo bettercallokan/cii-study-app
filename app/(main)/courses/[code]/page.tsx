@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { use } from "react";
+import { supabase } from "@/utils/supabase/client";
+import type { SummaryLangContent } from "@/utils/supabase/types";
 import {
   ChevronLeft,
   ChevronRight,
@@ -17,6 +19,7 @@ import {
   Scale,
   ShieldCheck,
   PanelRight,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -677,19 +680,100 @@ function ContentTab({
 
 const summaryIcons = [BookMarked, Scale, ShieldCheck];
 
-function SummaryTab({ unit }: { unit: Unit }) {
+function SummaryTab({
+  unit,
+  section,
+  summary,
+  loading,
+}: {
+  unit: Unit;
+  section: Section;
+  summary: SummaryLangContent | null;
+  loading: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
+        <Loader2 className="w-5 h-5 animate-spin" />
+        <span className="text-sm">Loading summary…</span>
+      </div>
+    );
+  }
+
+  if (summary) {
+    return (
+      <div>
+        <h2 className="text-lg font-semibold text-foreground mb-1">
+          {section.id}: {section.title}
+        </h2>
+        <p className="text-sm text-muted-foreground mb-6">Unit {unit.id} — {unit.title}</p>
+
+        {/* Overview */}
+        {summary.content.overview && (
+          <p className="text-sm text-muted-foreground leading-relaxed mb-6">
+            {summary.content.overview}
+          </p>
+        )}
+
+        {/* Key Points */}
+        {summary.content.key_points?.length > 0 && (
+          <div className="rounded-xl border border-border bg-card p-5 mb-4">
+            <h3 className="font-semibold text-foreground mb-3">Key Points</h3>
+            <ul className="space-y-2">
+              {summary.content.key_points.map((point, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+                  {point}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Summary Cards */}
+        <div className="space-y-4">
+          {summary.summary_cards.map((card, i) => {
+            const Icon = summaryIcons[i % summaryIcons.length];
+            return (
+              <div key={card.title} className="rounded-xl border border-border bg-card p-5">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
+                    <Icon className="w-4 h-4 text-primary" />
+                  </div>
+                  <h3 className="font-semibold text-foreground">{card.title}</h3>
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed">{card.body}</p>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Study Note */}
+        {summary.content.study_note && (
+          <div className="mt-4 rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4">
+            <p className="text-xs font-semibold text-yellow-500 mb-1">STUDY NOTE</p>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {summary.content.study_note}
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Fallback: no data in DB yet
   const cards = [
     {
       title: "Core Concepts",
-      body: `${unit.title} introduces the fundamental principles that underpin this area of insurance practice. You should be able to define key terms, distinguish between similar concepts, and explain how they operate in the context of an insurance contract.`,
+      body: `${unit.title} introduces the fundamental principles that underpin this area of insurance practice.`,
     },
     {
       title: "Legal and Regulatory Framework",
-      body: `This unit sits within the broader legal framework governing insurance in the UK. Key legislation includes the Insurance Act 2015, the Financial Services and Markets Act 2000, and relevant FCA rules. Understanding the regulatory backdrop is essential for the examination.`,
+      body: `This unit sits within the broader legal framework governing insurance in the UK.`,
     },
     {
       title: "Practical Application",
-      body: `Examination questions in this area often require candidates to apply concepts to given scenarios. Practise identifying the relevant principle, stating the rule accurately, and explaining how it applies — particularly in borderline or disputed fact patterns.`,
+      body: `Examination questions in this area often require candidates to apply concepts to given scenarios.`,
     },
   ];
 
@@ -699,24 +783,18 @@ function SummaryTab({ unit }: { unit: Unit }) {
         Unit {unit.id} Summary
       </h2>
       <p className="text-sm text-muted-foreground mb-6">{unit.title}</p>
-
       <div className="space-y-4">
         {cards.map((card, i) => {
           const Icon = summaryIcons[i];
           return (
-            <div
-              key={card.title}
-              className="rounded-xl border border-border bg-card p-5"
-            >
+            <div key={card.title} className="rounded-xl border border-border bg-card p-5">
               <div className="flex items-center gap-3 mb-3">
                 <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
                   <Icon className="w-4 h-4 text-primary" />
                 </div>
                 <h3 className="font-semibold text-foreground">{card.title}</h3>
               </div>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                {card.body}
-              </p>
+              <p className="text-sm text-muted-foreground leading-relaxed">{card.body}</p>
             </div>
           );
         })}
@@ -765,8 +843,38 @@ function buildInsights(unit: Unit): Insight[] {
   ];
 }
 
-function InsightsTab({ unit }: { unit: Unit }) {
-  const insights = useMemo(() => buildInsights(unit), [unit]);
+function InsightsTab({
+  unit,
+  summary,
+  loading,
+}: {
+  unit: Unit;
+  summary: SummaryLangContent | null;
+  loading: boolean;
+}) {
+  const fallbackInsights = useMemo(() => buildInsights(unit), [unit]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
+        <Loader2 className="w-5 h-5 animate-spin" />
+        <span className="text-sm">Loading insights…</span>
+      </div>
+    );
+  }
+
+  const insightsToRender: Array<{ tag: string; title: string; body: string; exam_critical: boolean }> =
+    summary?.insights?.length
+      ? summary.insights
+      : fallbackInsights.map((i) => ({
+          tag: i.tag,
+          title: i.title,
+          body: i.body,
+          exam_critical: i.examCritical,
+        }));
+
+  const resolveTagStyle = (tag: string): string =>
+    tagStyles[tag as InsightTag] ?? "bg-secondary text-muted-foreground";
 
   return (
     <div>
@@ -776,12 +884,12 @@ function InsightsTab({ unit }: { unit: Unit }) {
       <p className="text-sm text-muted-foreground mb-6">{unit.title}</p>
 
       <div className="space-y-4">
-        {insights.map((insight, i) => (
+        {insightsToRender.map((insight, i) => (
           <div
             key={i}
             className={cn(
               "rounded-xl border bg-card p-5",
-              insight.examCritical
+              insight.exam_critical
                 ? "border-yellow-500/30 bg-yellow-500/5"
                 : "border-border"
             )}
@@ -794,13 +902,13 @@ function InsightsTab({ unit }: { unit: Unit }) {
                 <span
                   className={cn(
                     "text-xs font-medium px-2 py-0.5 rounded-full",
-                    tagStyles[insight.tag]
+                    resolveTagStyle(insight.tag)
                   )}
                 >
                   {insight.tag}
                 </span>
               </div>
-              {insight.examCritical && (
+              {insight.exam_critical && (
                 <span className="text-xs font-medium text-yellow-500 shrink-0">
                   ★ Exam Critical
                 </span>
@@ -839,11 +947,32 @@ export default function CourseDetailPage({
   const [completedSections, setCompletedSections] = useState<Set<string>>(
     new Set()
   );
+  const [lessonSummary, setLessonSummary] = useState<SummaryLangContent | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
   const activeUnit = course.units.find((u) => u.id === activeUnitId)!;
   const activeSection = activeUnit.sections.find(
     (s) => s.id === activeSectionId
   )!;
+
+  // Fetch summary_content from Supabase when section changes
+  useEffect(() => {
+    if (!activeSection) return;
+    setSummaryLoading(true);
+    setLessonSummary(null);
+    supabase
+      .from("lessons")
+      .select("summary_content")
+      .ilike("title->>en", `%${activeSection.title}%`)
+      .limit(1)
+      .single()
+      .then(({ data }) => {
+        const sc = (data as { summary_content?: { en?: SummaryLangContent } } | null)
+          ?.summary_content?.en;
+        setLessonSummary(sc ?? null);
+        setSummaryLoading(false);
+      });
+  }, [activeSection?.title]);
 
   const currentFlatIdx = flatIndex.findIndex(
     (f) => f.unitId === activeUnitId && f.sectionId === activeSectionId
@@ -932,8 +1061,21 @@ export default function CourseDetailPage({
                 onMarkComplete={handleMarkComplete}
               />
             )}
-            {activeTab === "summary" && <SummaryTab unit={activeUnit} />}
-            {activeTab === "insights" && <InsightsTab unit={activeUnit} />}
+            {activeTab === "summary" && (
+              <SummaryTab
+                unit={activeUnit}
+                section={activeSection}
+                summary={lessonSummary}
+                loading={summaryLoading}
+              />
+            )}
+            {activeTab === "insights" && (
+              <InsightsTab
+                unit={activeUnit}
+                summary={lessonSummary}
+                loading={summaryLoading}
+              />
+            )}
           </div>
         </div>
       </main>

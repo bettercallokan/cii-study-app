@@ -9,12 +9,22 @@ export type Module = {
   updated_at: string;
 };
 
+export type SummaryLangContent = {
+  content: {
+    overview: string;
+    key_points: string[];
+    study_note: string;
+  };
+  summary_cards: { title: string; body: string }[];
+  insights: { tag: string; title: string; body: string; exam_critical: boolean }[];
+};
+
 export type Lesson = {
   id: string;
   module_id: string;
   title: { en: string; tr: string };
   content: { en?: string; tr?: string };
-  summary_content: { en?: string; tr?: string };
+  summary_content: { en?: SummaryLangContent; tr?: SummaryLangContent };
   knowledge_level: "know" | "understand";
   order_index: number;
   estimated_duration_minutes: number | null;
