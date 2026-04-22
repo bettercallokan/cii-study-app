@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   Layers,
@@ -13,16 +13,63 @@ import {
   Flame,
   BookOpen,
   ArrowLeft,
-  ChevronDown,
+  Clock,
   Loader2,
   AlertCircle,
   GraduationCap,
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 import { cn } from "@/lib/utils";
+import { courseUnitTitles } from "@/lib/course-data";
 import type { Module, Lesson, Flashcard } from "@/utils/supabase/types";
 
-// ─── Supabase client (null-safe for missing env vars) ─────────
+// ─── Course metadata ──────────────────────────────────────────
+
+const courseStyles = [
+  {
+    code: "W01",
+    urlCode: "w01",
+    description: "Fundamental principles of insurance, legal frameworks, and market structure.",
+    color: "blue" as const,
+  },
+  {
+    code: "WUE",
+    urlCode: "wue",
+    description: "Risk assessment, underwriting procedures, pricing and exposure management.",
+    color: "purple" as const,
+  },
+  {
+    code: "WCE",
+    urlCode: "wce",
+    description: "Claims process, settlement procedures, fraud detection and expense management.",
+    color: "emerald" as const,
+  },
+];
+
+type CourseColor = "blue" | "purple" | "emerald";
+
+const colorMap: Record<CourseColor, { badge: string; icon: string; card: string; ring: string }> = {
+  blue: {
+    badge: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+    icon: "bg-blue-500/10 border-blue-500/20 text-blue-400",
+    card: "hover:border-blue-500/30 hover:bg-blue-500/5",
+    ring: "text-blue-400",
+  },
+  purple: {
+    badge: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+    icon: "bg-purple-500/10 border-purple-500/20 text-purple-400",
+    card: "hover:border-purple-500/30 hover:bg-purple-500/5",
+    ring: "text-purple-400",
+  },
+  emerald: {
+    badge: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    icon: "bg-emerald-500/10 border-emerald-500/20 text-emerald-400",
+    card: "hover:border-emerald-500/30 hover:bg-emerald-500/5",
+    ring: "text-emerald-400",
+  },
+};
+
+// ─── Supabase client ──────────────────────────────────────────
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -31,7 +78,7 @@ function getSupabase() {
   return createClient(url, anon);
 }
 
-// ─── Shared UI primitives ─────────────────────────────────────
+// ─── Shared primitives ────────────────────────────────────────
 
 function LoadingSpinner({ label }: { label?: string }) {
   return (
@@ -51,189 +98,316 @@ function ErrorCard({ message }: { message: string }) {
   );
 }
 
-// ─── Selection View (grid + lessons panel) ────────────────────
+// ─── Progress Ring (from original design) ────────────────────
 
-function SelectionView({
-  onSelectModule,
-  onSelectLesson,
+function ProgressRing({
+  progress,
+  size = 52,
+  color = "text-primary",
 }: {
-  onSelectModule: (id: string, label: string) => void;
-  onSelectLesson: (id: string, label: string) => void;
+  progress: number;
+  size?: number;
+  color?: string;
+}) {
+  const radius = (size - 8) / 2;
+  const circumference = radius * 2 * Math.PI;
+  const offset = circumference - (progress / 100) * circumference;
+
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg className="transform -rotate-90" width={size} height={size}>
+        <circle
+          className="text-secondary"
+          strokeWidth="4"
+          stroke="currentColor"
+          fill="transparent"
+          r={radius}
+          cx={size / 2}
+          cy={size / 2}
+        />
+        <circle
+          className={cn("transition-all duration-500", color)}
+          strokeWidth="4"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          stroke="currentColor"
+          fill="transparent"
+          r={radius}
+          cx={size / 2}
+          cy={size / 2}
+        />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-foreground">
+        {progress}%
+      </span>
+    </div>
+  );
+}
+
+// ─── Courses View ─────────────────────────────────────────────
+
+function CoursesView({
+  onSelectModule,
+}: {
+  onSelectModule: (id: string, title: string, urlCode: string) => void;
 }) {
   const [modules, setModules] = useState<Module[] | null>(null);
-  const [lessonCache, setLessonCache] = useState<Record<string, Lesson[]>>({});
-  const [loadingLessonId, setLoadingLessonId] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [cardCounts, setCardCounts] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const sb = getSupabase();
     if (!sb) { setModules([]); return; }
+
     sb.from("modules")
       .select("*")
       .eq("is_active", true)
       .order("order_index")
       .then(({ data, error: err }) => {
-        if (err) setError(err.message);
-        else setModules((data as Module[]) ?? []);
+        if (err) { setError(err.message); return; }
+        setModules((data as Module[]) ?? []);
+      });
+
+    // Fetch lightweight flashcard module_id list to compute counts
+    sb.from("flashcards")
+      .select("module_id")
+      .eq("is_active", true)
+      .then(({ data }) => {
+        if (!data) return;
+        const counts: Record<string, number> = {};
+        for (const row of data as { module_id: string | null }[]) {
+          if (row.module_id) counts[row.module_id] = (counts[row.module_id] ?? 0) + 1;
+        }
+        setCardCounts(counts);
       });
   }, []);
 
-  const handleToggle = useCallback(
-    async (mod: Module) => {
-      if (expandedId === mod.id) { setExpandedId(null); return; }
-      setExpandedId(mod.id);
-      if (lessonCache[mod.id]) return;
-      setLoadingLessonId(mod.id);
-      const sb = getSupabase();
-      if (!sb) { setLoadingLessonId(null); return; }
-      const { data, error: err } = await sb
-        .from("lessons")
-        .select("id, module_id, title, order_index, estimated_duration_minutes, knowledge_level, is_active, version, created_at, updated_at, content, summary_content")
-        .eq("module_id", mod.id)
-        .eq("is_active", true)
-        .order("order_index");
-      setLoadingLessonId(null);
-      if (!err) {
-        setLessonCache((prev) => ({ ...prev, [mod.id]: (data as Lesson[]) ?? [] }));
-      }
-    },
-    [expandedId, lessonCache]
-  );
-
-  if (modules === null) return <LoadingSpinner label="Loading modules…" />;
+  if (modules === null) return <LoadingSpinner label="Loading courses…" />;
   if (error) return <ErrorCard message={error} />;
   if (modules.length === 0) {
     return (
       <div className="text-center py-16 rounded-xl border border-border bg-card">
-        <Layers className="w-10 h-10 mx-auto mb-3 text-muted-foreground opacity-30" />
-        <p className="font-medium text-foreground mb-1">No modules found</p>
-        <p className="text-sm text-muted-foreground">No active modules have been added yet.</p>
+        <GraduationCap className="w-10 h-10 mx-auto mb-3 text-muted-foreground opacity-30" />
+        <p className="font-medium text-foreground mb-1">No courses found</p>
+        <p className="text-sm text-muted-foreground">No active courses have been added yet.</p>
       </div>
     );
   }
 
-  const expandedModule = modules.find((m) => m.id === expandedId);
-  const expandedLessons = expandedId ? (lessonCache[expandedId] ?? []) : [];
-  const isLoadingLessons = loadingLessonId === expandedId;
+  const totalCards = Object.values(cardCounts).reduce((a, b) => a + b, 0);
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm font-medium text-muted-foreground">
-        Select a module or lesson to start studying:
-      </p>
+    <div>
+      {/* Summary stats */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        {[
+          { label: "Total Cards", value: totalCards || "—" },
+          { label: "Mastered", value: "0" },
+          { label: "Due Today", value: "0" },
+        ].map(({ label, value }) => (
+          <div
+            key={label}
+            className="p-4 rounded-xl border border-border bg-card text-center"
+          >
+            <p className="text-2xl font-bold text-foreground">{value}</p>
+            <p className="text-xs text-muted-foreground mt-1">{label}</p>
+          </div>
+        ))}
+      </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {modules.map((mod) => {
-          const title = mod.title.en;
-          const isExpanded = expandedId === mod.id;
+      {/* Course deck cards */}
+      <div className="space-y-4">
+        {modules.map((mod, idx) => {
+          const style = courseStyles[idx] ?? courseStyles[0];
+          const colors = colorMap[style.color];
+          const count = cardCounts[mod.id] ?? 0;
 
           return (
-            <div
+            <button
               key={mod.id}
+              onClick={() => onSelectModule(mod.id, mod.title.en, style.urlCode)}
               className={cn(
-                "rounded-xl border bg-card p-5 transition-all",
-                isExpanded ? "border-primary/40" : "border-border"
+                "group w-full flex items-center gap-5 p-5 rounded-xl border border-border bg-card transition-all duration-200 text-left",
+                colors.card
               )}
             >
-              <div className="flex items-start gap-3 mb-4">
-                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 shrink-0">
-                  <GraduationCap className="w-5 h-5 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-foreground leading-snug">{title}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">v{mod.version}</p>
-                </div>
+              <div
+                className={cn(
+                  "flex items-center justify-center w-12 h-12 rounded-xl border shrink-0",
+                  colors.icon
+                )}
+              >
+                <BookOpen className="w-5 h-5" />
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => onSelectModule(mod.id, title)}
-                  className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
-                >
-                  Study All
-                </button>
-                <button
-                  onClick={() => handleToggle(mod)}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition-colors",
-                    isExpanded
-                      ? "border-primary/40 bg-primary/10 text-primary"
-                      : "border-border bg-secondary/30 text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  Units
-                  <ChevronDown
-                    className={cn("w-3.5 h-3.5 transition-transform", isExpanded && "rotate-180")}
-                  />
-                </button>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span
+                    className={cn(
+                      "px-2 py-0.5 rounded-full border text-xs font-bold tracking-wider",
+                      colors.badge
+                    )}
+                  >
+                    {style.code}
+                  </span>
+                  <h2 className="font-semibold text-foreground truncate">{mod.title.en}</h2>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed line-clamp-1">
+                  {style.description}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  {count > 0 ? `${count} cards` : "No cards yet"}
+                </p>
               </div>
-            </div>
+
+              <ProgressRing progress={0} color={colors.ring} size={52} />
+            </button>
           );
         })}
       </div>
+    </div>
+  );
+}
 
-      {/* Lessons panel below grid */}
-      {expandedId && expandedModule && (
-        <div className="rounded-xl border border-primary/20 bg-card overflow-hidden">
-          <div className="px-5 py-4 border-b border-border">
-            <h3 className="font-semibold text-foreground text-sm">
-              {expandedModule.title.en} — Lessons
-            </h3>
-          </div>
-          {isLoadingLessons ? (
-            <LoadingSpinner label="Loading lessons…" />
-          ) : expandedLessons.length === 0 ? (
-            <p className="px-5 py-4 text-sm text-muted-foreground">
-              No lessons found for this module.
-            </p>
-          ) : (
-            <ul className="divide-y divide-border">
-              {expandedLessons.map((lesson) => (
-                <li key={lesson.id}>
-                  <button
-                    onClick={() => onSelectLesson(lesson.id, lesson.title.en)}
-                    className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-secondary/30 transition-colors text-left group"
-                  >
-                    <BookOpen className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                    <span className="text-sm text-foreground flex-1 truncate group-hover:text-primary transition-colors">
-                      {lesson.title.en}
-                    </span>
-                    {lesson.estimated_duration_minutes && (
-                      <span className="text-xs text-muted-foreground shrink-0">
-                        ~{lesson.estimated_duration_minutes} min
-                      </span>
-                    )}
-                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                  </button>
-                </li>
-              ))}
-            </ul>
+// ─── Lessons View ─────────────────────────────────────────────
+
+function LessonsView({
+  moduleId,
+  moduleTitle,
+  courseCode,
+  onSelectLesson,
+  onBack,
+}: {
+  moduleId: string;
+  moduleTitle: string;
+  courseCode: string;
+  onSelectLesson: (id: string, displayTitle: string) => void;
+  onBack: () => void;
+}) {
+  const [lessons, setLessons] = useState<Lesson[] | null>(null);
+  const [cardCounts, setCardCounts] = useState<Record<string, number>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  const staticTitles = courseUnitTitles[courseCode] ?? [];
+
+  useEffect(() => {
+    setLessons(null);
+    const sb = getSupabase();
+    if (!sb) { setLessons([]); return; }
+
+    sb.from("lessons")
+      .select("id, module_id, title, order_index, estimated_duration_minutes, knowledge_level, is_active, version, created_at, updated_at, content, summary_content")
+      .eq("module_id", moduleId)
+      .eq("is_active", true)
+      .order("order_index")
+      .then(({ data, error: err }) => {
+        if (err) setError(err.message);
+        else setLessons((data as Lesson[]) ?? []);
+      });
+
+    sb.from("flashcards")
+      .select("lesson_id")
+      .eq("module_id", moduleId)
+      .eq("is_active", true)
+      .then(({ data }) => {
+        if (!data) return;
+        const counts: Record<string, number> = {};
+        for (const row of data as { lesson_id: string | null }[]) {
+          if (row.lesson_id) counts[row.lesson_id] = (counts[row.lesson_id] ?? 0) + 1;
+        }
+        setCardCounts(counts);
+      });
+  }, [moduleId]);
+
+  if (error) return <ErrorCard message={error} />;
+
+  const getTitle = (lesson: Lesson, idx: number) => staticTitles[idx] ?? lesson.title.en;
+
+  return (
+    <div>
+      <button
+        onClick={onBack}
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to Courses
+      </button>
+
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="px-5 py-4 border-b border-border">
+          <h2 className="font-semibold text-foreground">{moduleTitle || "Loading…"}</h2>
+          {lessons !== null && (
+            <p className="text-xs text-muted-foreground mt-0.5">{lessons.length} units</p>
           )}
         </div>
-      )}
+
+        {lessons === null ? (
+          <LoadingSpinner label="Loading units…" />
+        ) : lessons.length === 0 ? (
+          <p className="px-5 py-4 text-sm text-muted-foreground">No units found for this course.</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {lessons.map((lesson, idx) => {
+              const displayTitle = getTitle(lesson, idx);
+              const count = cardCounts[lesson.id] ?? 0;
+              return (
+                <li key={lesson.id}>
+                  <button
+                    onClick={() => onSelectLesson(lesson.id, displayTitle)}
+                    className="w-full flex items-center gap-4 px-5 py-4 hover:bg-secondary/30 transition-colors text-left group"
+                  >
+                    <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-secondary text-xs font-medium text-muted-foreground shrink-0">
+                      {idx + 1}
+                    </span>
+                    <span className="text-sm text-foreground flex-1 truncate group-hover:text-primary transition-colors">
+                      {displayTitle}
+                    </span>
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {count > 0 ? `${count} cards` : "—"}
+                    </span>
+                    {lesson.estimated_duration_minutes && (
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+                        <Clock className="w-3 h-3" />
+                        {lesson.estimated_duration_minutes} min
+                      </span>
+                    )}
+                    <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
 
 // ─── Flashcard Viewer ─────────────────────────────────────────
 
-function FlashcardViewer({ cards }: { cards: Flashcard[] }) {
+function FlashcardViewer({
+  cards,
+  masteredIds,
+  onMastered,
+}: {
+  cards: Flashcard[];
+  masteredIds: Set<string>;
+  onMastered: (id: string) => void;
+}) {
   const [indices, setIndices] = useState(() => cards.map((_, i) => i));
   const [currentIdx, setCurrentIdx] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
-  const [masteredIds, setMasteredIds] = useState<Set<string>>(new Set());
 
   const card = cards[indices[currentIdx]];
 
   const go = (delta: 1 | -1) => {
     setIsFlipped(false);
-    setCurrentIdx((prev) =>
-      Math.max(0, Math.min(indices.length - 1, prev + delta))
-    );
+    setCurrentIdx((prev) => Math.max(0, Math.min(indices.length - 1, prev + delta)));
   };
 
-  const markMastered = () => {
-    if (card) setMasteredIds((prev) => new Set(prev).add(card.id));
+  const handleMastered = () => {
+    if (card) onMastered(card.id);
     go(1);
   };
 
@@ -246,7 +420,6 @@ function FlashcardViewer({ cards }: { cards: Flashcard[] }) {
   const reset = () => {
     setIsFlipped(false);
     setCurrentIdx(0);
-    setMasteredIds(new Set());
     setIndices(cards.map((_, i) => i));
   };
 
@@ -254,7 +427,6 @@ function FlashcardViewer({ cards }: { cards: Flashcard[] }) {
 
   return (
     <div>
-      {/* Session info */}
       <div className="flex items-center justify-between mb-4 text-sm text-muted-foreground">
         <span className="flex items-center gap-1.5">
           <BookOpen className="w-4 h-4" />
@@ -266,12 +438,10 @@ function FlashcardViewer({ cards }: { cards: Flashcard[] }) {
         </span>
       </div>
 
-      {/* Card face */}
       <div
         onClick={() => setIsFlipped((f) => !f)}
         className="relative min-h-[280px] rounded-2xl border border-border bg-card cursor-pointer select-none"
       >
-        {/* Front */}
         <div
           className={cn(
             "absolute inset-0 p-8 flex flex-col rounded-2xl transition-opacity duration-200",
@@ -298,7 +468,6 @@ function FlashcardViewer({ cards }: { cards: Flashcard[] }) {
           </p>
         </div>
 
-        {/* Back */}
         <div
           className={cn(
             "absolute inset-0 p-8 flex flex-col rounded-2xl bg-primary/5 transition-opacity duration-200",
@@ -306,13 +475,10 @@ function FlashcardViewer({ cards }: { cards: Flashcard[] }) {
           )}
         >
           <span className="text-xs font-medium text-green-500 mb-4">Answer</span>
-          <p className="text-lg text-foreground leading-relaxed flex-1">
-            {card.back.en}
-          </p>
+          <p className="text-lg text-foreground leading-relaxed flex-1">{card.back.en}</p>
         </div>
       </div>
 
-      {/* Controls */}
       <div className="flex items-center justify-between mt-5">
         <button
           onClick={() => go(-1)}
@@ -331,7 +497,7 @@ function FlashcardViewer({ cards }: { cards: Flashcard[] }) {
             Again
           </button>
           <button
-            onClick={markMastered}
+            onClick={handleMastered}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary/90 transition-colors text-sm font-medium text-primary-foreground"
           >
             <CheckCircle2 className="w-4 h-4" />
@@ -348,7 +514,6 @@ function FlashcardViewer({ cards }: { cards: Flashcard[] }) {
         </button>
       </div>
 
-      {/* Quick actions */}
       <div className="flex items-center justify-center gap-6 mt-5">
         <button
           onClick={shuffle}
@@ -362,86 +527,120 @@ function FlashcardViewer({ cards }: { cards: Flashcard[] }) {
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <RotateCcw className="w-4 h-4" />
-          Reset
+          Reset Progress
         </button>
       </div>
     </div>
   );
 }
 
-// ─── Study View (active filter) ───────────────────────────────
+// ─── Cards View ───────────────────────────────────────────────
 
-function StudyView({
-  moduleId,
+function CardsView({
   lessonId,
-  filterLabel,
-  onClearFilter,
+  lessonTitle,
+  moduleId,
+  courseCode,
+  onBack,
 }: {
-  moduleId: string | null;
-  lessonId: string | null;
-  filterLabel: string;
-  onClearFilter: () => void;
+  lessonId: string;
+  lessonTitle: string;
+  moduleId: string;
+  courseCode: string;
+  onBack: () => void;
 }) {
   const [cards, setCards] = useState<Flashcard[] | null>(null);
+  const [masteredIds, setMasteredIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setCards(null);
-    setError(null);
+    setMasteredIds(new Set());
     const sb = getSupabase();
     if (!sb) { setCards([]); return; }
-
-    let query = sb.from("flashcards").select("*").eq("is_active", true);
-    if (lessonId) query = query.eq("lesson_id", lessonId);
-    else if (moduleId) query = query.eq("module_id", moduleId);
-
-    query.then(({ data, error: err }) => {
-      if (err) setError(err.message);
-      else setCards((data as Flashcard[]) ?? []);
-    });
-  }, [moduleId, lessonId]);
+    sb.from("flashcards")
+      .select("*")
+      .eq("lesson_id", lessonId)
+      .eq("is_active", true)
+      .then(({ data, error: err }) => {
+        if (err) setError(err.message);
+        else setCards((data as Flashcard[]) ?? []);
+      });
+  }, [lessonId]);
 
   if (error) return <ErrorCard message={error} />;
-  if (cards === null) return <LoadingSpinner label="Loading cards…" />;
+
+  const total = cards?.length ?? 0;
+  const mastered = masteredIds.size;
+  const remaining = total - mastered;
+  const progress = total > 0 ? Math.round((mastered / total) * 100) : 0;
 
   return (
     <div>
-      {/* Filter badge */}
-      <div className="flex items-center justify-between p-4 mb-6 rounded-xl border border-border bg-card">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <Layers className="w-4 h-4 text-primary shrink-0" />
-          <span className="text-sm font-medium text-foreground truncate">
-            {filterLabel || "Loading…"}
-          </span>
-          <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium shrink-0">
-            {cards.length} cards
-          </span>
+      <button
+        onClick={onBack}
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to Units
+      </button>
+
+      {/* Session stats */}
+      {cards !== null && cards.length > 0 && (
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="p-4 rounded-xl border border-border bg-card flex items-center gap-3">
+            <ProgressRing progress={progress} size={48} />
+            <div>
+              <p className="text-xl font-bold text-foreground">{total}</p>
+              <p className="text-xs text-muted-foreground">Total Cards</p>
+            </div>
+          </div>
+          <div className="p-4 rounded-xl border border-border bg-card text-center">
+            <p className="text-2xl font-bold text-green-500">{mastered}</p>
+            <p className="text-xs text-muted-foreground mt-1">Mastered</p>
+          </div>
+          <div className="p-4 rounded-xl border border-border bg-card text-center">
+            <p className="text-2xl font-bold text-foreground">{remaining}</p>
+            <p className="text-xs text-muted-foreground mt-1">Remaining</p>
+          </div>
         </div>
-        <button
-          onClick={onClearFilter}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0 ml-4"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          Change
-        </button>
+      )}
+
+      {/* Unit label */}
+      <div className="flex items-center gap-2.5 p-4 mb-6 rounded-xl border border-border bg-card">
+        <Layers className="w-4 h-4 text-primary shrink-0" />
+        <span className="text-sm font-medium text-foreground truncate flex-1">
+          {lessonTitle}
+        </span>
+        {cards !== null && (
+          <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium shrink-0">
+            {total} cards
+          </span>
+        )}
       </div>
 
-      {cards.length === 0 ? (
+      {cards === null ? (
+        <LoadingSpinner label="Loading cards…" />
+      ) : cards.length === 0 ? (
         <div className="text-center py-16 rounded-xl border border-border bg-card">
           <Layers className="w-10 h-10 mx-auto mb-3 text-muted-foreground opacity-30" />
           <p className="font-medium text-foreground mb-1">No cards found</p>
           <p className="text-sm text-muted-foreground">
-            No flashcards have been added for this filter yet.
+            No flashcards have been added for this unit yet.
           </p>
         </div>
       ) : (
-        <FlashcardViewer cards={cards} />
+        <FlashcardViewer
+          cards={cards}
+          masteredIds={masteredIds}
+          onMastered={(id) => setMasteredIds((prev) => new Set(prev).add(id))}
+        />
       )}
     </div>
   );
 }
 
-// ─── Main content (wrapped in Suspense for useSearchParams) ───
+// ─── Main content ─────────────────────────────────────────────
 
 function FlashcardsContent() {
   const searchParams = useSearchParams();
@@ -449,76 +648,73 @@ function FlashcardsContent() {
 
   const moduleId = searchParams.get("moduleId");
   const lessonId = searchParams.get("lessonId");
-  const hasFilter = Boolean(moduleId || lessonId);
+  const courseCode = searchParams.get("code") ?? "";
+  const unitTitle = searchParams.get("t") ? decodeURIComponent(searchParams.get("t")!) : "";
 
-  const [filterLabel, setFilterLabel] = useState<string>("");
+  const [moduleTitle, setModuleTitle] = useState("");
 
   useEffect(() => {
-    if (!hasFilter) { setFilterLabel(""); return; }
+    if (!moduleId) { setModuleTitle(""); return; }
     const sb = getSupabase();
-    if (!sb) {
-      setFilterLabel(lessonId ? "Lesson" : "Module");
-      return;
-    }
-    if (lessonId) {
-      sb.from("lessons")
-        .select("title")
-        .eq("id", lessonId)
-        .single()
-        .then(({ data }) => {
-          setFilterLabel(
-            data ? (data as { title: { en: string } }).title.en : "Lesson"
-          );
-        });
-    } else if (moduleId) {
-      sb.from("modules")
-        .select("title")
-        .eq("id", moduleId)
-        .single()
-        .then(({ data }) => {
-          setFilterLabel(
-            data ? (data as { title: { en: string } }).title.en : "Module"
-          );
-        });
-    }
-  }, [moduleId, lessonId, hasFilter]);
+    if (!sb) { setModuleTitle("Module"); return; }
+    sb.from("modules").select("title").eq("id", moduleId).single().then(({ data }) => {
+      setModuleTitle(data ? (data as { title: { en: string } }).title.en : "Module");
+    });
+  }, [moduleId]);
+
+  const view = lessonId && moduleId ? "cards" : moduleId ? "lessons" : "courses";
+
+  const subtitle =
+    view === "courses"
+      ? "Master key concepts with active recall"
+      : view === "lessons"
+      ? moduleTitle || "Select a unit"
+      : unitTitle || "Study session";
 
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto px-6 py-8">
-        {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-2 text-xs font-medium text-primary mb-3">
             <Layers className="w-4 h-4" />
             Spaced Repetition
           </div>
           <h1 className="text-2xl font-semibold text-foreground tracking-tight">
-            Flashcard Deck
+            Flashcard Decks
           </h1>
-          <p className="text-muted-foreground mt-1">
-            {hasFilter
-              ? filterLabel || "Loading…"
-              : "Select a module or lesson to start studying"}
-          </p>
+          <p className="text-muted-foreground mt-1">{subtitle}</p>
         </div>
 
-        {hasFilter ? (
-          <StudyView
-            moduleId={moduleId}
-            lessonId={lessonId}
-            filterLabel={filterLabel}
-            onClearFilter={() => router.push("/flashcards")}
+        {view === "courses" && (
+          <CoursesView
+            onSelectModule={(id, title, urlCode) => {
+              setModuleTitle(title);
+              router.push(`/flashcards?moduleId=${id}&code=${urlCode}`);
+            }}
           />
-        ) : (
-          <SelectionView
-            onSelectModule={(id, label) => {
-              setFilterLabel(label);
-              router.push(`/flashcards?moduleId=${id}`);
+        )}
+
+        {view === "lessons" && moduleId && (
+          <LessonsView
+            moduleId={moduleId}
+            moduleTitle={moduleTitle}
+            courseCode={courseCode}
+            onSelectLesson={(id, displayTitle) => {
+              router.push(
+                `/flashcards?moduleId=${moduleId}&code=${courseCode}&lessonId=${id}&t=${encodeURIComponent(displayTitle)}`
+              );
             }}
-            onSelectLesson={(id, label) => {
-              setFilterLabel(label);
-              router.push(`/flashcards?lessonId=${id}`);
-            }}
+            onBack={() => router.push("/flashcards")}
+          />
+        )}
+
+        {view === "cards" && lessonId && moduleId && (
+          <CardsView
+            lessonId={lessonId}
+            lessonTitle={unitTitle}
+            moduleId={moduleId}
+            courseCode={courseCode}
+            onBack={() => router.push(`/flashcards?moduleId=${moduleId}&code=${courseCode}`)}
           />
         )}
       </div>
