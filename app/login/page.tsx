@@ -18,7 +18,8 @@ const SITE_URL =
   (typeof window !== "undefined" ? window.location.origin : "https://certifocus.com");
 
 const COOLDOWN_KEY = "otp_cooldown_until";
-const COOLDOWN_SECONDS = 60;
+const COOLDOWN_SENT = 60;       // seconds after a successful send
+const COOLDOWN_RATE_LIMIT = 300; // 5 min after a rate-limit error
 
 function isRateLimit(msg: string, status?: number) {
   return (
@@ -27,6 +28,13 @@ function isRateLimit(msg: string, status?: number) {
     msg.toLowerCase().includes("too many") ||
     msg.toLowerCase().includes("security purposes")
   );
+}
+
+function formatCooldown(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return s > 0 ? `${m}m ${s}s` : `${m}m`;
 }
 
 export default function LoginPage() {
@@ -100,7 +108,7 @@ export default function LoginPage() {
     if (otpErr) {
       if (isRateLimit(otpErr.message, otpErr.status)) {
         setState("rate_limited");
-        startCooldown(COOLDOWN_SECONDS);
+        startCooldown(COOLDOWN_RATE_LIMIT);
       } else {
         setState("error");
         setErrorMsg(otpErr.message);
@@ -109,7 +117,7 @@ export default function LoginPage() {
     }
 
     setState("sent");
-    startCooldown(COOLDOWN_SECONDS);
+    startCooldown(COOLDOWN_SENT);
   }
 
   return (
@@ -179,8 +187,8 @@ export default function LoginPage() {
                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-400 flex items-start gap-2">
                   <Clock className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>
-                    Too many requests. Please wait{" "}
-                    <span className="font-semibold tabular-nums">{cooldown}s</span>{" "}
+                    Email sending limit reached. Please wait{" "}
+                    <span className="font-semibold tabular-nums">{formatCooldown(cooldown)}</span>{" "}
                     before trying again.
                   </span>
                 </div>
@@ -199,7 +207,7 @@ export default function LoginPage() {
                 ) : cooldown > 0 ? (
                   <>
                     <Clock className="w-4 h-4" />
-                    Retry in {cooldown}s
+                    Retry in {formatCooldown(cooldown)}
                   </>
                 ) : (
                   <>
@@ -247,7 +255,7 @@ function SentState({
         Didn&apos;t receive it? Check your spam folder or{" "}
         {cooldown > 0 ? (
           <span className="text-muted-foreground tabular-nums">
-            retry in {cooldown}s
+            retry in {formatCooldown(cooldown)}
           </span>
         ) : (
           <button
