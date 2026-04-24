@@ -42,6 +42,15 @@ type DbCourse = {
   title: string;
 };
 
+// ─── Helpers ─────────────────────────────────────────────────
+
+function extractEn(val: unknown): string {
+  if (typeof val === "string") return val;
+  if (val && typeof val === "object" && "en" in val)
+    return String((val as { en: unknown }).en);
+  return "";
+}
+
 // ─── Main Page ────────────────────────────────────────────────
 
 export default function StudyModePage({
@@ -112,14 +121,14 @@ export default function StudyModePage({
       const sorted: DbChapter[] = (chaptersData as any[]).map((ch) => ({
         id: ch.id,
         chapter_number: ch.chapter_number,
-        title: ch.title,
+        title: extractEn(ch.title),
         order_index: ch.order_index,
         sections: [...(ch.chapter_sections ?? [])].sort(
           (a: DbSection, b: DbSection) => a.order_index - b.order_index
-        ),
+        ).map((s: DbSection) => ({ ...s, title: extractEn(s.title) })),
       }));
 
-      setCourse(courseData);
+      setCourse({ ...courseData, title: extractEn(courseData.title) });
       setChapters(sorted);
 
       if (sorted.length > 0 && sorted[0].sections.length > 0) {
