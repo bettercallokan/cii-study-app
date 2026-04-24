@@ -52,11 +52,17 @@ export function PdfViewer({
     return () => ro.disconnect();
   }, []);
 
-  // Reset when a different PDF is loaded
+  // Reset scroll + page when a different PDF is loaded or page changes
   useEffect(() => {
     setCurrentPage(1);
     setNumPages(0);
   }, [fileUrl]);
+
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollTop = 0;
+    }
+  }, [currentPage, fileUrl]);
 
   const goTo = (page: number) => {
     setCurrentPage(Math.min(Math.max(1, page), numPages || 1));
@@ -103,7 +109,7 @@ export function PdfViewer({
       </div>
 
       {/* PDF area */}
-      <div ref={containerRef} className="flex-1 overflow-auto relative bg-secondary/30">
+      <div ref={containerRef} className="flex-1 overflow-auto relative bg-secondary/30 scroll-smooth">
         {pdfLoading && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
             <Loader2 className="w-6 h-6 text-primary animate-spin" />
@@ -148,7 +154,7 @@ export function PdfViewer({
                 <p className="text-sm text-destructive">Failed to load PDF.</p>
               </div>
             }
-            className="flex justify-center"
+            className="flex justify-center py-3"
           >
             <Page
               pageNumber={currentPage}

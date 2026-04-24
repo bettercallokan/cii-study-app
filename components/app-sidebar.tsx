@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   BookOpen,
@@ -15,17 +15,8 @@ import {
   ChevronRight,
   Menu,
   X,
-  FileText,
-  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/utils/supabase/client";
-
-interface PdfFile {
-  name: string;      // "w01-study-text.pdf"
-  courseCode: string; // "w01"
-  label: string;     // "W01 Study Text"
-}
 
 const modules = [
   { code: "W01", name: "Award in General Insurance", href: "/courses/w01" },
@@ -39,43 +30,9 @@ const navigation = [
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const router = useRouter();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isModulesOpen, setIsModulesOpen] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-
-  // Supabase Storage PDF listing
-  const [pdfFiles, setPdfFiles] = useState<PdfFile[]>([]);
-  const [storageLoading, setStorageLoading] = useState(true);
-
-  useEffect(() => {
-    supabase.storage
-      .from("pdfs")
-      .list("", { limit: 100, sortBy: { column: "name", order: "asc" } })
-      .then(({ data }) => {
-        if (data) {
-          setPdfFiles(
-            data
-              .filter((item) => item.name.toLowerCase().endsWith(".pdf"))
-              .map((item) => {
-                const nameWithoutExt = item.name.replace(/\.pdf$/i, "");
-                const courseCode = nameWithoutExt.split("-")[0].toLowerCase();
-                const label = nameWithoutExt
-                  .replace(/-/g, " ")
-                  .replace(/\b\w/g, (c) => c.toUpperCase());
-                return { name: item.name, courseCode, label };
-              })
-          );
-        }
-        setStorageLoading(false);
-      });
-  }, []);
-
-  const openPdf = (file: PdfFile) => {
-    router.push(
-      `/courses/${file.courseCode}/study?file=${encodeURIComponent(file.name)}`
-    );
-  };
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
@@ -246,52 +203,6 @@ export function AppSidebar() {
           )}
         </Link>
 
-        {/* Study PDFs — dynamic from Supabase Storage */}
-        {!isCollapsed && (
-          <div className="pt-3">
-            <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">
-              Study PDFs
-            </p>
-
-            {storageLoading ? (
-              <div className="flex items-center gap-2 px-3 py-2 text-muted-foreground">
-                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-                <span className="text-xs">Loading…</span>
-              </div>
-            ) : pdfFiles.length === 0 ? (
-              <p className="px-3 py-2 text-xs text-muted-foreground/60">
-                No PDFs found
-              </p>
-            ) : (
-              <div className="space-y-0.5">
-                {pdfFiles.map((file) => {
-                  const isActive =
-                    pathname.includes(`/courses/${file.courseCode}/study`) &&
-                    typeof window !== "undefined" &&
-                    new URLSearchParams(window.location.search).get("file") === file.name;
-                  return (
-                    <button
-                      key={file.name}
-                      onClick={() => openPdf(file)}
-                      className={cn(
-                        "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors",
-                        isActive
-                          ? "bg-primary/10 text-primary"
-                          : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                      )}
-                    >
-                      <FileText className={cn(
-                        "w-[18px] h-[18px] shrink-0",
-                        isActive ? "text-primary" : "text-muted-foreground"
-                      )} />
-                      <span className="text-xs truncate">{file.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
       </nav>
 
       {/* Bottom Section */}

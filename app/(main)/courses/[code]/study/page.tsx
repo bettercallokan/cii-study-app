@@ -7,16 +7,14 @@ import { notFound } from "next/navigation";
 import {
   ChevronLeft,
   ChevronDown,
-  PanelRightClose,
-  PanelRightOpen,
   CheckCircle2,
   GraduationCap,
   BookOpen,
   Loader2,
 } from "lucide-react";
+
 import { cn } from "@/lib/utils";
 import { PdfViewer } from "@/components/pdf-viewer";
-import { AiChat } from "@/components/ai-chat";
 import { supabase } from "@/utils/supabase/client";
 
 // ─── Types ────────────────────────────────────────────────────
@@ -71,7 +69,6 @@ export default function StudyModePage({
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
 
-  const [isChatOpen, setIsChatOpen] = useState(true);
   const [activeChapterId, setActiveChapterId] = useState<string>("");
   const [activeSectionCode, setActiveSectionCode] = useState<string>("");
   const [expandedChapterIds, setExpandedChapterIds] = useState<string[]>([]);
@@ -209,7 +206,7 @@ export default function StudyModePage({
   if (notFound404) notFound();
 
   return (
-    <div className="h-screen bg-background flex flex-col overflow-hidden">
+    <div className="h-[100dvh] bg-background flex flex-col overflow-hidden">
       {/* Top Header */}
       <header className="h-14 border-b border-border bg-card px-4 flex items-center justify-between shrink-0 z-20">
         <div className="flex items-center gap-3">
@@ -257,17 +254,6 @@ export default function StudyModePage({
               {isComplete ? "Completed" : "Mark Complete"}
             </span>
           </button>
-          <button
-            onClick={() => setIsChatOpen(!isChatOpen)}
-            className="p-2 rounded-lg hover:bg-secondary transition-colors"
-            title={isChatOpen ? "Hide AI Assistant" : "Show AI Assistant"}
-          >
-            {isChatOpen ? (
-              <PanelRightClose className="w-5 h-5 text-muted-foreground" />
-            ) : (
-              <PanelRightOpen className="w-5 h-5 text-muted-foreground" />
-            )}
-          </button>
         </div>
       </header>
 
@@ -278,7 +264,7 @@ export default function StudyModePage({
           className={cn(
             "w-64 border-r border-border bg-card overflow-y-auto shrink-0 transition-all duration-300",
             isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
-            "fixed lg:relative inset-y-14 left-0 z-10 lg:z-0"
+            "fixed lg:relative top-14 bottom-0 left-0 z-10 lg:z-0 lg:top-0"
           )}
         >
           <div className="p-3">
@@ -403,39 +389,18 @@ export default function StudyModePage({
           />
         )}
 
-        {/* Split Screen Content */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* PDF Viewer - 70% */}
-          <div
-            className={cn(
-              "flex-1 p-4 overflow-hidden transition-all",
-              isChatOpen ? "lg:w-[70%]" : "w-full"
-            )}
-          >
-            <PdfViewer
-              pdfName={pdfName}
-              pdfUrl={pdfUrl}
-              pdfLoading={pdfLoading}
-              pdfError={pdfError ?? undefined}
-              className="h-full"
-            />
-          </div>
-
-          {/* AI Chat Panel - 30% */}
-          {isChatOpen && (
-            <div className="hidden lg:block w-[30%] min-w-[320px] max-w-[420px] border-l border-border p-4 overflow-hidden">
-              <AiChat className="h-full" />
-            </div>
-          )}
+        {/* PDF Viewer */}
+        <div className="flex-1 p-3 sm:p-4 overflow-hidden">
+          <PdfViewer
+            pdfName={pdfName}
+            pdfUrl={pdfUrl}
+            pdfLoading={pdfLoading}
+            pdfError={pdfError ?? undefined}
+            className="h-full"
+          />
         </div>
       </div>
 
-      {/* Mobile AI Chat Bottom Sheet */}
-      {isChatOpen && (
-        <div className="lg:hidden fixed inset-x-0 bottom-0 h-[50vh] border-t border-border bg-card p-4 z-30">
-          <AiChat className="h-full" />
-        </div>
-      )}
     </div>
   );
 }
