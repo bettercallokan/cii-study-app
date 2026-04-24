@@ -21,7 +21,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import ContentRenderer from "@/components/ContentRenderer";
+import MarkdownRenderer from "@/components/markdown/MarkdownRenderer";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -30,6 +30,7 @@ type DbSection = {
   section_code: string;
   title: string;
   content_text: string | null;
+  content_markdown: string | null;
   summary_content: SectionSummaryContent | null;
   order_index: number;
 };
@@ -307,9 +308,9 @@ function ContentTab({
       </div>
 
       {/* Content */}
-      {section.content_text ? (
+      {section.content_markdown ? (
         <div className="rounded-xl border border-border bg-secondary/20 p-6">
-          <ContentRenderer content={section.content_text} />
+          <MarkdownRenderer content={section.content_markdown} />
         </div>
       ) : (
         <div className="space-y-4">
@@ -667,7 +668,7 @@ export default function CourseDetailPage({
         .select(
           `id, chapter_number, title, order_index,
            chapter_sections (
-             id, section_code, title, content_text, summary_content, order_index
+             id, section_code, title, content_text, content_markdown, summary_content, order_index
            )`
         )
         .eq("course_id", courseData.id)
