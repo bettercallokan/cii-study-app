@@ -21,6 +21,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ContentRenderer } from "@/components/ContentRenderer";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -308,13 +309,7 @@ function ContentTab({
       {/* Content */}
       {section.content_text ? (
         <div className="rounded-xl border border-border bg-secondary/20 p-6">
-          <div className="space-y-4">
-            {section.content_text.split("\n\n").filter(Boolean).map((paragraph, i) => (
-              <p key={i} className="text-sm text-muted-foreground leading-relaxed">
-                {paragraph.trim()}
-              </p>
-            ))}
-          </div>
+          <ContentRenderer text={section.content_text} />
         </div>
       ) : (
         <div className="space-y-4">
