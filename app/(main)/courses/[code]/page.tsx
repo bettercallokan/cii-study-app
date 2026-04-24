@@ -642,6 +642,7 @@ export default function CourseDetailPage({
   const [chapters, setChapters] = useState<DbChapter[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound404, setNotFound404] = useState(false);
+  const [debugError, setDebugError] = useState<string | null>(null);
 
   const [activeChapterId, setActiveChapterId] = useState<string>("");
   const [activeSectionCode, setActiveSectionCode] = useState<string>("");
@@ -662,6 +663,7 @@ export default function CourseDetailPage({
         .single();
 
       if (courseErr || !courseData) {
+        setDebugError(`COURSES query failed: ${JSON.stringify(courseErr)} | code param: "${code}"`);
         setNotFound404(true);
         setLoading(false);
         return;
@@ -679,6 +681,7 @@ export default function CourseDetailPage({
         .order("order_index");
 
       if (chaptersErr || !chaptersData) {
+        setDebugError(`CHAPTERS query failed: ${JSON.stringify(chaptersErr)} | course_id: "${courseData.id}"`);
         setNotFound404(true);
         setLoading(false);
         return;
@@ -768,7 +771,16 @@ export default function CourseDetailPage({
     );
   }
 
-  if (notFound404 || !course) notFound();
+  if (notFound404 || !course) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-8">
+        <div className="max-w-xl w-full rounded-xl border border-destructive/40 bg-destructive/5 p-6 text-sm font-mono text-destructive whitespace-pre-wrap break-all">
+          <p className="font-bold mb-2">DEBUG — Course not found</p>
+          <p>{debugError ?? "No error details captured."}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
