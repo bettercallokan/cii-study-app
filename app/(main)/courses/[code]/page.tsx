@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { use } from "react";
 import { supabase } from "@/utils/supabase/client";
-import type { SummaryLangContent } from "@/utils/supabase/types";
 import {
   ChevronLeft,
   ChevronRight,
@@ -23,351 +22,61 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// ─── Static Course Data ────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────
 
-const courseData = {
-  w01: {
-    title: "Award in General Insurance",
-    code: "W01",
-    units: [
-      {
-        id: 1,
-        title: "Risk and insurance",
-        sections: [
-          { id: "A", title: "The role of risk in insurance" },
-          { id: "B", title: "Categories of risk" },
-          { id: "C", title: "Features of insurable risks" },
-          { id: "D", title: "Components of risk" },
-          { id: "E", title: "Insurance as a risk transfer mechanism" },
-          { id: "F", title: "Pooling of risks" },
-          { id: "G", title: "Self-insurance" },
-          { id: "H", title: "Co-insurance and dual insurance" },
-          { id: "I", title: "Benefits of insurance" },
-        ],
-      },
-      {
-        id: 2,
-        title: "The insurance market",
-        sections: [
-          { id: "A", title: "Market structure" },
-          { id: "B", title: "Types of insurer" },
-          { id: "C", title: "Reinsurance" },
-          { id: "D", title: "Lloyd's" },
-          { id: "E", title: "Intermediaries" },
-          { id: "F", title: "Distribution channels" },
-          { id: "G", title: "Influence of the internet and technology" },
-          { id: "H", title: "Key professional roles" },
-          { id: "I", title: "Classes of insurance" },
-        ],
-      },
-      {
-        id: 3,
-        title: "Contract and agency",
-        sections: [
-          { id: "A", title: "Essentials of a valid contract" },
-          { id: "B", title: "Offer and acceptance" },
-          { id: "C", title: "Consideration" },
-          { id: "D", title: "Intention to create legal relations" },
-          { id: "E", title: "Capacity to contract" },
-          { id: "F", title: "Cancellation of insurance contracts" },
-          { id: "G", title: "Agency" },
-          { id: "H", title: "Terms of business agreements (TOBAs)" },
-        ],
-      },
-      {
-        id: 4,
-        title: "Insurable interest",
-        sections: [
-          { id: "A", title: "What is insurable interest?" },
-          { id: "B", title: "When does insurable interest exist?" },
-          { id: "C", title: "How is insurable interest applied?" },
-        ],
-      },
-      {
-        id: 5,
-        title: "Disclosure and representation",
-        sections: [
-          { id: "A", title: "Principle of good faith" },
-          { id: "B", title: "Duty of disclosure" },
-          { id: "C", title: "Material information" },
-          { id: "D", title: "Consequences of non-disclosure and misrepresentation" },
-          { id: "E", title: "Compulsory insurances" },
-        ],
-      },
-      {
-        id: 6,
-        title: "Proximate cause",
-        sections: [
-          { id: "A", title: "Definition of proximate cause" },
-          { id: "B", title: "Modification by policy wordings" },
-        ],
-      },
-      {
-        id: 7,
-        title: "Indemnity",
-        sections: [
-          { id: "A", title: "What is indemnity?" },
-          { id: "B", title: "How is indemnity applied?" },
-          { id: "C", title: "Measuring indemnity" },
-          { id: "D", title: "Modifying indemnity" },
-          { id: "E", title: "Limiting factors" },
-        ],
-      },
-      {
-        id: 8,
-        title: "Contribution and subrogation",
-        sections: [
-          { id: "A", title: "Contribution" },
-          { id: "B", title: "How does contribution arise?" },
-          { id: "C", title: "How is contribution applied?" },
-          { id: "D", title: "Subrogation" },
-          { id: "E", title: "Insurers' subrogation rights" },
-          { id: "F", title: "Where subrogation rights don't apply" },
-        ],
-      },
-      {
-        id: 9,
-        title: "Insurance regulation",
-        sections: [
-          { id: "A", title: "Role of the insurance regulator" },
-          { id: "B", title: "International Association of Insurance Supervisors (IAIS)" },
-          { id: "C", title: "Capital adequacy of insurers" },
-          { id: "D", title: "Combatting financial crime" },
-          { id: "E", title: "Impact of fraud on the insurance industry" },
-        ],
-      },
-      {
-        id: 10,
-        title: "Ethics, corporate governance and internal controls",
-        sections: [
-          { id: "A", title: "Ethical standards" },
-          { id: "B", title: "Corporate governance" },
-          { id: "C", title: "Internal control system" },
-          { id: "D", title: "Data protection" },
-        ],
-      },
-    ],
-  },
-  wue: {
-    title: "Insurance Underwriting",
-    code: "WUE",
-    units: [
-      {
-        id: 1,
-        title: "Material Facts and Disclosure",
-        sections: [
-          { id: "A", title: "The duty of good faith" },
-          { id: "B", title: "Material facts" },
-          { id: "C", title: "Perils and hazards" },
-          { id: "D", title: "Moral and physical hazard" },
-          { id: "E", title: "Obtaining material facts" },
-        ],
-      },
-      {
-        id: 2,
-        title: "Underwriting Procedures",
-        sections: [
-          { id: "A", title: "Proposal forms and questions" },
-          { id: "B", title: "Quotations" },
-          { id: "C", title: "Premium calculation" },
-          { id: "D", title: "Cover notes and certificates" },
-          { id: "E", title: "Premium payment methods" },
-        ],
-      },
-      {
-        id: 3,
-        title: "Insurance Policies",
-        sections: [
-          { id: "A", title: "Policy structure and contents" },
-          { id: "B", title: "Policy exclusions" },
-          { id: "C", title: "Policy conditions" },
-          { id: "D", title: "Excesses, deductibles and franchises" },
-          { id: "E", title: "Warranties and representations" },
-        ],
-      },
-      {
-        id: 4,
-        title: "Renewals and Cancellation",
-        sections: [
-          { id: "A", title: "The renewal process" },
-          { id: "B", title: "Cancellation clauses" },
-        ],
-      },
-      {
-        id: 5,
-        title: "Personal Insurances",
-        sections: [
-          { id: "A", title: "Motor insurance" },
-          { id: "B", title: "Health and personal accident" },
-          { id: "C", title: "Household insurance" },
-          { id: "D", title: "Travel insurance" },
-          { id: "E", title: "Extended warranties" },
-        ],
-      },
-      {
-        id: 6,
-        title: "Commercial Insurances",
-        sections: [
-          { id: "A", title: "Property insurance" },
-          { id: "B", title: "Pecuniary insurance" },
-          { id: "C", title: "Liability insurance" },
-        ],
-      },
-      {
-        id: 7,
-        title: "Support Services",
-        sections: [
-          { id: "A", title: "Helplines and authorised repairers" },
-          { id: "B", title: "Risk control and surveys" },
-          { id: "C", title: "Uninsured loss recovery" },
-        ],
-      },
-      {
-        id: 8,
-        title: "Underwriting Considerations",
-        sections: [
-          { id: "A", title: "Motor and personal lines criteria" },
-          { id: "B", title: "Commercial property criteria" },
-          { id: "C", title: "Liability criteria" },
-          { id: "D", title: "Extended warranty criteria" },
-          { id: "E", title: "Fraud deterrence and detection" },
-          { id: "F", title: "Fair treatment of customers" },
-        ],
-      },
-      {
-        id: 9,
-        title: "Pricing Principles",
-        sections: [
-          { id: "A", title: "Data sources and management information" },
-          { id: "B", title: "Claims data and loss ratios" },
-          { id: "C", title: "Frequency and severity" },
-          { id: "D", title: "Monitoring periods" },
-        ],
-      },
-      {
-        id: 10,
-        title: "Pricing Factors",
-        sections: [
-          { id: "A", title: "Risk premium" },
-          { id: "B", title: "Expenses and return on capital" },
-          { id: "C", title: "Investment income and tax" },
-        ],
-      },
-      {
-        id: 11,
-        title: "Managing Exposure",
-        sections: [
-          { id: "A", title: "The underwriting cycle" },
-          { id: "B", title: "Risk accumulation" },
-          { id: "C", title: "Reinsurance" },
-        ],
-      },
-    ],
-  },
-  wce: {
-    title: "Insurance Claims Handling",
-    code: "WCE",
-    units: [
-      {
-        id: 1,
-        title: "General Principles of Claims",
-        sections: [
-          { id: "A", title: "Legal requirements for a valid claim" },
-          { id: "B", title: "Policy conditions relating to claims" },
-          { id: "C", title: "Documentary evidence" },
-          { id: "D", title: "Proximate cause" },
-        ],
-      },
-      {
-        id: 2,
-        title: "Insurance Products",
-        sections: [
-          { id: "A", title: "Motor policies" },
-          { id: "B", title: "Household, gadget and travel policies" },
-          { id: "C", title: "Commercial property and pecuniary" },
-          { id: "D", title: "Commercial liability policies" },
-          { id: "E", title: "Health policies" },
-        ],
-      },
-      {
-        id: 3,
-        title: "Claims Considerations",
-        sections: [
-          { id: "A", title: "Role of the claims department" },
-          { id: "B", title: "Service standards" },
-          { id: "C", title: "Parties to a claim" },
-          { id: "D", title: "Claims estimating and reserving" },
-          { id: "E", title: "Fraud" },
-          { id: "F", title: "Fair treatment of customers" },
-          { id: "G", title: "Disputes and complaints" },
-        ],
-      },
-      {
-        id: 4,
-        title: "Claims Handling Procedures",
-        sections: [
-          { id: "A", title: "Motor claims procedures" },
-          { id: "B", title: "Household and travel procedures" },
-          { id: "C", title: "Commercial property procedures" },
-          { id: "D", title: "Liability claims procedures" },
-          { id: "E", title: "Health claims procedures" },
-          { id: "F", title: "External support services" },
-        ],
-      },
-      {
-        id: 5,
-        title: "Claims Function and Structure",
-        sections: [
-          { id: "A", title: "Claims systems" },
-          { id: "B", title: "Organisational structures" },
-        ],
-      },
-      {
-        id: 6,
-        title: "Claims Settlement",
-        sections: [
-          { id: "A", title: "Methods of settlement" },
-          { id: "B", title: "Why full indemnity may not be paid" },
-          { id: "C", title: "Recovering claim costs" },
-          { id: "D", title: "Uninsured and untraced drivers" },
-        ],
-      },
-      {
-        id: 7,
-        title: "Expense Management",
-        sections: [
-          { id: "A", title: "Role of the claims manager" },
-          { id: "B", title: "Claims leakage" },
-          { id: "C", title: "Financial monitoring" },
-          { id: "D", title: "Reserving practice" },
-        ],
-      },
-    ],
-  },
-} as const;
+type DbSection = {
+  id: string;
+  section_code: string;
+  title: string;
+  content_text: string | null;
+  summary_content: SectionSummaryContent | null;
+  order_index: number;
+};
 
-type CourseCode = keyof typeof courseData;
-type Course = (typeof courseData)[CourseCode];
-type Unit = Course["units"][number];
-type Section = Unit["sections"][number];
+type DbChapter = {
+  id: string;
+  chapter_number: string;
+  title: string;
+  order_index: number;
+  sections: DbSection[];
+};
+
+type DbCourse = {
+  id: string;
+  code: string;
+  title: string;
+  description: string | null;
+};
+
+type SectionSummaryContent = {
+  summary: {
+    headline: string;
+    key_concepts: { term: string; definition: string; vs: string | null }[];
+    must_know: string[];
+  };
+  insights: { tag: string; title: string; body: string }[];
+};
+
 type ActiveTab = "content" | "summary" | "insights";
 
 // ─── Flat index for sequential navigation ─────────────────────
 
 type FlatEntry = {
-  unitId: number;
-  sectionId: string;
+  chapterId: string;
+  sectionCode: string;
   sectionTitle: string;
-  unitTitle: string;
+  chapterTitle: string;
+  chapterNumber: string;
 };
 
-function buildFlatIndex(units: readonly Unit[]): FlatEntry[] {
-  return units.flatMap((u) =>
-    u.sections.map((s) => ({
-      unitId: u.id,
-      sectionId: s.id,
+function buildFlatIndex(chapters: DbChapter[]): FlatEntry[] {
+  return chapters.flatMap((ch) =>
+    ch.sections.map((s) => ({
+      chapterId: ch.id,
+      sectionCode: s.section_code,
       sectionTitle: s.title,
-      unitTitle: u.title,
+      chapterTitle: ch.title,
+      chapterNumber: ch.chapter_number,
     }))
   );
 }
@@ -376,20 +85,22 @@ function buildFlatIndex(units: readonly Unit[]): FlatEntry[] {
 
 function CourseSidebar({
   course,
-  activeUnitId,
-  activeSectionId,
-  expandedUnitIds,
+  chapters,
+  activeChapterId,
+  activeSectionCode,
+  expandedChapterIds,
   completedSections,
   onSelectSection,
-  onToggleUnit,
+  onToggleChapter,
 }: {
-  course: Course;
-  activeUnitId: number;
-  activeSectionId: string;
-  expandedUnitIds: number[];
+  course: DbCourse;
+  chapters: DbChapter[];
+  activeChapterId: string;
+  activeSectionCode: string;
+  expandedChapterIds: string[];
   completedSections: Set<string>;
-  onSelectSection: (unitId: number, sectionId: string) => void;
-  onToggleUnit: (unitId: number) => void;
+  onSelectSection: (chapterId: string, sectionCode: string) => void;
+  onToggleChapter: (chapterId: string) => void;
 }) {
   return (
     <aside className="lg:w-72 lg:shrink-0">
@@ -409,35 +120,35 @@ function CourseSidebar({
           </h2>
         </div>
 
-        {/* Unit accordion */}
+        {/* Chapter accordion */}
         <nav className="p-2 max-h-[calc(100vh-14rem)] overflow-y-auto">
-          {course.units.map((unit) => {
-            const isExpanded = expandedUnitIds.includes(unit.id);
-            const isActiveUnit = unit.id === activeUnitId;
-            const completedInUnit = unit.sections.filter((s) =>
-              completedSections.has(`${unit.id}-${s.id}`)
+          {chapters.map((chapter) => {
+            const isExpanded = expandedChapterIds.includes(chapter.id);
+            const isActiveChapter = chapter.id === activeChapterId;
+            const completedInChapter = chapter.sections.filter((s) =>
+              completedSections.has(`${chapter.id}-${s.section_code}`)
             ).length;
 
             return (
-              <div key={unit.id} className="mb-0.5">
+              <div key={chapter.id} className="mb-0.5">
                 <button
-                  onClick={() => onToggleUnit(unit.id)}
+                  onClick={() => onToggleChapter(chapter.id)}
                   className={cn(
                     "w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-left transition-colors",
-                    isActiveUnit
+                    isActiveChapter
                       ? "bg-primary/10 text-primary"
                       : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
                   )}
                 >
                   <span className="text-xs font-bold w-5 shrink-0 tabular-nums">
-                    {unit.id}
+                    {chapter.chapter_number}
                   </span>
                   <span className="text-xs font-medium flex-1 leading-snug">
-                    {unit.title}
+                    {chapter.title}
                   </span>
-                  {completedInUnit > 0 && (
+                  {completedInChapter > 0 && (
                     <span className="text-[10px] text-green-500 font-medium shrink-0">
-                      {completedInUnit}/{unit.sections.length}
+                      {completedInChapter}/{chapter.sections.length}
                     </span>
                   )}
                   <ChevronDown
@@ -450,17 +161,17 @@ function CourseSidebar({
 
                 {isExpanded && (
                   <ul className="mt-0.5 ml-3 pl-3 border-l border-border space-y-0.5 mb-1">
-                    {unit.sections.map((section) => {
+                    {chapter.sections.map((section) => {
                       const isActive =
-                        isActiveUnit && section.id === activeSectionId;
-                      const key = `${unit.id}-${section.id}`;
+                        isActiveChapter && section.section_code === activeSectionCode;
+                      const key = `${chapter.id}-${section.section_code}`;
                       const isDone = completedSections.has(key);
 
                       return (
-                        <li key={section.id}>
+                        <li key={section.section_code}>
                           <button
                             onClick={() =>
-                              onSelectSection(unit.id, section.id)
+                              onSelectSection(chapter.id, section.section_code)
                             }
                             className={cn(
                               "w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-colors",
@@ -480,7 +191,7 @@ function CourseSidebar({
                                     : "text-muted-foreground"
                                 )}
                               >
-                                {section.id}
+                                {section.section_code}
                               </span>
                             )}
                             <span className="text-xs leading-snug">
@@ -501,7 +212,7 @@ function CourseSidebar({
   );
 }
 
-// ─── Tab Bar ───────���──────────────────────────────────────────
+// ─── Tab Bar ──────────────────────────────────────────────────
 
 function TabBar({
   activeTab,
@@ -541,16 +252,16 @@ function TabBar({
 
 function ContentTab({
   course,
-  unit,
+  chapter,
   section,
   flatIndex,
   currentFlatIdx,
   onNavigate,
   onMarkComplete,
 }: {
-  course: Course;
-  unit: Unit;
-  section: Section;
+  course: DbCourse;
+  chapter: DbChapter;
+  section: DbSection;
   flatIndex: FlatEntry[];
   currentFlatIdx: number;
   onNavigate: (entry: FlatEntry) => void;
@@ -577,71 +288,61 @@ function ContentTab({
         <ChevronRight className="w-3 h-3" />
         <span className="text-foreground font-medium">{course.code}</span>
         <ChevronRight className="w-3 h-3" />
-        <span>Unit {unit.id}</span>
+        <span>Chapter {chapter.chapter_number}</span>
         <ChevronRight className="w-3 h-3" />
-        <span>Section {section.id}</span>
+        <span>Section {section.section_code}</span>
       </nav>
 
       {/* Section header */}
       <div className="mb-6">
         <div className="inline-flex items-center gap-2 text-xs font-medium text-primary bg-primary/10 border border-primary/20 rounded-full px-3 py-1 mb-3">
           <BookOpen className="w-3.5 h-3.5" />
-          Unit {unit.id} · Section {section.id}
+          Chapter {chapter.chapter_number} · Section {section.section_code}
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight leading-tight">
           {section.title}
         </h1>
-        <p className="text-sm text-muted-foreground mt-1.5">{unit.title}</p>
+        <p className="text-sm text-muted-foreground mt-1.5">{chapter.title}</p>
       </div>
 
-      {/* Placeholder study content */}
-      <div className="space-y-4">
+      {/* Content */}
+      {section.content_text ? (
         <div className="rounded-xl border border-border bg-secondary/20 p-6">
-          <h2 className="font-semibold text-foreground mb-3">Overview</h2>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            This section covers <strong className="text-foreground">{section.title.toLowerCase()}</strong> as
-            part of <em>{unit.title}</em>. Understanding this topic is essential for the{" "}
-            {course.code} examination and for professional practice in general insurance.
-          </p>
-          <p className="text-sm text-muted-foreground leading-relaxed mt-3">
-            Insurance professionals must be able to identify, analyse and apply the core
-            concepts in this area. The CII examination tests both knowledge and understanding,
-            so ensure you can explain each concept in your own words and apply it to
-            practical scenarios.
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-border bg-secondary/20 p-6">
-          <h2 className="font-semibold text-foreground mb-3">Key Points</h2>
-          <ul className="space-y-2">
-            {[
-              `Define and explain the core concept of ${section.title.toLowerCase()}.`,
-              "Understand how this topic relates to the broader insurance framework.",
-              "Be able to apply this knowledge to real-world scenarios and case studies.",
-              "Recognise how this area is regulated and what obligations arise.",
-            ].map((point, i) => (
-              <li key={i} className="flex items-start gap-2.5 text-sm text-muted-foreground">
-                <span className="mt-0.5 flex items-center justify-center w-4 h-4 rounded-full bg-primary/20 text-primary text-[10px] font-bold shrink-0">
-                  {i + 1}
-                </span>
-                {point}
-              </li>
+          <div className="space-y-4">
+            {section.content_text.split("\n\n").filter(Boolean).map((paragraph, i) => (
+              <p key={i} className="text-sm text-muted-foreground leading-relaxed">
+                {paragraph.trim()}
+              </p>
             ))}
-          </ul>
+          </div>
         </div>
-
-        <div className="rounded-xl border border-primary/20 bg-primary/5 p-6">
-          <h2 className="font-semibold text-foreground mb-2 flex items-center gap-2">
-            <BookOpen className="w-4 h-4 text-primary" />
-            Study Note
-          </h2>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            Full study material for this section is being prepared by our content team and
-            will be available shortly. In the meantime, use the Summary and Key Insights
-            tabs for a condensed overview of this unit&apos;s most important concepts.
-          </p>
+      ) : (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-border bg-secondary/20 p-6">
+            <h2 className="font-semibold text-foreground mb-3">Overview</h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              This section covers{" "}
+              <strong className="text-foreground">
+                {section.title.toLowerCase()}
+              </strong>{" "}
+              as part of <em>{chapter.title}</em>. Understanding this topic is
+              essential for the {course.code} examination and for professional
+              practice in general insurance.
+            </p>
+          </div>
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-6">
+            <h2 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-primary" />
+              Study Note
+            </h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Full study material for this section will be available shortly. Use
+              the Summary and Key Insights tabs for a condensed overview of this
+              section&apos;s most important concepts.
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Prev / Next */}
       <div className="flex items-center justify-between mt-8 pt-6 border-t border-border">
@@ -681,59 +382,41 @@ function ContentTab({
 const summaryIcons = [BookMarked, Scale, ShieldCheck];
 
 function SummaryTab({
-  unit,
+  chapter,
   section,
-  summary,
-  loading,
 }: {
-  unit: Unit;
-  section: Section;
-  summary: SummaryLangContent | null;
-  loading: boolean;
+  chapter: DbChapter;
+  section: DbSection;
 }) {
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
-        <Loader2 className="w-5 h-5 animate-spin" />
-        <span className="text-sm">Loading summary…</span>
-      </div>
-    );
-  }
+  const summary = section.summary_content?.summary;
 
-  if (summary) {
+  if (!summary) {
+    const fallbackCards = [
+      {
+        title: "Core Concepts",
+        body: `${chapter.title} introduces the fundamental principles that underpin this area of insurance practice.`,
+      },
+      {
+        title: "Legal and Regulatory Framework",
+        body: "This chapter sits within the broader legal framework governing insurance in the UK.",
+      },
+      {
+        title: "Practical Application",
+        body: "Examination questions in this area often require candidates to apply concepts to given scenarios.",
+      },
+    ];
+
     return (
       <div>
         <h2 className="text-lg font-semibold text-foreground mb-1">
-          {section.id}: {section.title}
+          {section.section_code}: {section.title}
         </h2>
-        <p className="text-sm text-muted-foreground mb-6">Unit {unit.id} — {unit.title}</p>
-
-        {/* Overview */}
-        {summary.content.overview && (
-          <p className="text-sm text-muted-foreground leading-relaxed mb-6">
-            {summary.content.overview}
-          </p>
-        )}
-
-        {/* Key Points */}
-        {summary.content.key_points?.length > 0 && (
-          <div className="rounded-xl border border-border bg-card p-5 mb-4">
-            <h3 className="font-semibold text-foreground mb-3">Key Points</h3>
-            <ul className="space-y-2">
-              {summary.content.key_points.map((point, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
-                  {point}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Summary Cards */}
+        <p className="text-sm text-muted-foreground mb-6">
+          Chapter {chapter.chapter_number} — {chapter.title}
+        </p>
         <div className="space-y-4">
-          {summary.summary_cards.map((card, i) => {
-            const Icon = summaryIcons[i % summaryIcons.length];
+          {fallbackCards.map((card, i) => {
+            const Icon = summaryIcons[i];
             return (
               <div key={card.title} className="rounded-xl border border-border bg-card p-5">
                 <div className="flex items-center gap-3 mb-3">
@@ -747,177 +430,191 @@ function SummaryTab({
             );
           })}
         </div>
-
-        {/* Study Note */}
-        {summary.content.study_note && (
-          <div className="mt-4 rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4">
-            <p className="text-xs font-semibold text-yellow-500 mb-1">STUDY NOTE</p>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              {summary.content.study_note}
-            </p>
-          </div>
-        )}
       </div>
     );
   }
 
-  // Fallback: no data in DB yet
-  const cards = [
-    {
-      title: "Core Concepts",
-      body: `${unit.title} introduces the fundamental principles that underpin this area of insurance practice.`,
-    },
-    {
-      title: "Legal and Regulatory Framework",
-      body: `This unit sits within the broader legal framework governing insurance in the UK.`,
-    },
-    {
-      title: "Practical Application",
-      body: `Examination questions in this area often require candidates to apply concepts to given scenarios.`,
-    },
-  ];
-
   return (
     <div>
       <h2 className="text-lg font-semibold text-foreground mb-1">
-        Unit {unit.id} Summary
+        {section.section_code}: {section.title}
       </h2>
-      <p className="text-sm text-muted-foreground mb-6">{unit.title}</p>
-      <div className="space-y-4">
-        {cards.map((card, i) => {
-          const Icon = summaryIcons[i];
-          return (
-            <div key={card.title} className="rounded-xl border border-border bg-card p-5">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
-                  <Icon className="w-4 h-4 text-primary" />
+      <p className="text-sm text-muted-foreground mb-6">
+        Chapter {chapter.chapter_number} — {chapter.title}
+      </p>
+
+      {/* Headline */}
+      <p className="text-sm text-muted-foreground leading-relaxed mb-6">
+        {summary.headline}
+      </p>
+
+      {/* Key Concepts */}
+      {summary.key_concepts?.length > 0 && (
+        <div className="rounded-xl border border-border bg-card p-5 mb-4">
+          <h3 className="font-semibold text-foreground mb-3">Key Concepts</h3>
+          <div className="space-y-3">
+            {summary.key_concepts.map((concept, i) => (
+              <div
+                key={i}
+                className="border-b border-border last:border-0 pb-3 last:pb-0"
+              >
+                <div className="flex items-start gap-2">
+                  <span className="text-xs font-bold text-primary shrink-0 mt-0.5 min-w-[1.5rem]">
+                    {i + 1}.
+                  </span>
+                  <div>
+                    <span className="text-sm font-medium text-foreground">
+                      {concept.term}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      {" "}— {concept.definition}
+                    </span>
+                    {concept.vs && (
+                      <p className="text-xs text-yellow-500 mt-1">
+                        vs. {concept.vs}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <h3 className="font-semibold text-foreground">{card.title}</h3>
               </div>
-              <p className="text-sm text-muted-foreground leading-relaxed">{card.body}</p>
-            </div>
-          );
-        })}
-      </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Must Know */}
+      {summary.must_know?.length > 0 && (
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-5">
+          <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+            <BookMarked className="w-4 h-4 text-primary" />
+            Must Know
+          </h3>
+          <ul className="space-y-2">
+            {summary.must_know.map((item, i) => (
+              <li
+                key={i}
+                className="flex items-start gap-2 text-sm text-muted-foreground"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── Key Insights Tab ─────────────────────────────────────────
 
-type InsightTag = "Core Principle" | "Legal Rule" | "Exam Tip";
-
-type Insight = {
-  tag: InsightTag;
-  title: string;
-  body: string;
-  examCritical: boolean;
+const tagStyles: Record<string, string> = {
+  exam_bullet: "bg-blue-500/10 text-blue-400",
+  exam_tip: "bg-yellow-500/10 text-yellow-500",
+  exam_trap: "bg-red-500/10 text-red-400",
 };
 
-const tagStyles: Record<InsightTag, string> = {
-  "Core Principle": "bg-blue-500/10 text-blue-400",
-  "Legal Rule": "bg-purple-500/10 text-purple-400",
-  "Exam Tip": "bg-yellow-500/10 text-yellow-500",
+const tagLabels: Record<string, string> = {
+  exam_bullet: "Exam Bullet",
+  exam_tip: "Exam Tip",
+  exam_trap: "Exam Trap",
 };
-
-function buildInsights(unit: Unit): Insight[] {
-  return [
-    {
-      tag: "Core Principle",
-      title: `The Foundation of ${unit.title}`,
-      body: `The core principle of this unit is that insurance operates as a mechanism for risk transfer and indemnification. Every concept in ${unit.title} flows from this foundation — when in doubt, ask how the rule serves the purpose of indemnity and fair risk allocation.`,
-      examCritical: true,
-    },
-    {
-      tag: "Legal Rule",
-      title: "Statutory and Common Law Requirements",
-      body: `Several topics in this unit are governed by statute (notably the Insurance Act 2015) as well as common law rules developed through case law. Examination questions may test whether you can distinguish the source of a rule and explain its effect accurately.`,
-      examCritical: true,
-    },
-    {
-      tag: "Exam Tip",
-      title: "Structuring Your Answers",
-      body: `For written questions, always: (1) state the relevant rule or principle, (2) apply it to the facts given, (3) reach a clear conclusion. Avoid vague statements — examiners reward precise use of terminology. Revise key definitions until you can reproduce them without prompts.`,
-      examCritical: false,
-    },
-  ];
-}
 
 function InsightsTab({
-  unit,
-  summary,
-  loading,
+  chapter,
+  section,
 }: {
-  unit: Unit;
-  summary: SummaryLangContent | null;
-  loading: boolean;
+  chapter: DbChapter;
+  section: DbSection;
 }) {
-  const fallbackInsights = useMemo(() => buildInsights(unit), [unit]);
+  const insights = section.summary_content?.insights;
 
-  if (loading) {
+  if (!insights?.length) {
     return (
-      <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
-        <Loader2 className="w-5 h-5 animate-spin" />
-        <span className="text-sm">Loading insights…</span>
-      </div>
-    );
-  }
-
-  const insightsToRender: Array<{ tag: string; title: string; body: string; exam_critical: boolean }> =
-    summary?.insights?.length
-      ? summary.insights
-      : fallbackInsights.map((i) => ({
-          tag: i.tag,
-          title: i.title,
-          body: i.body,
-          exam_critical: i.examCritical,
-        }));
-
-  const resolveTagStyle = (tag: string): string =>
-    tagStyles[tag as InsightTag] ?? "bg-secondary text-muted-foreground";
-
-  return (
-    <div>
-      <h2 className="text-lg font-semibold text-foreground mb-1">
-        Key Insights — Unit {unit.id}
-      </h2>
-      <p className="text-sm text-muted-foreground mb-6">{unit.title}</p>
-
-      <div className="space-y-4">
-        {insightsToRender.map((insight, i) => (
-          <div
-            key={i}
-            className={cn(
-              "rounded-xl border bg-card p-5",
-              insight.exam_critical
-                ? "border-yellow-500/30 bg-yellow-500/5"
-                : "border-border"
-            )}
-          >
-            <div className="flex items-start justify-between gap-3 mb-3">
-              <div className="flex items-center gap-2.5">
+      <div>
+        <h2 className="text-lg font-semibold text-foreground mb-1">
+          Key Insights — Chapter {chapter.chapter_number}
+        </h2>
+        <p className="text-sm text-muted-foreground mb-6">{chapter.title}</p>
+        <div className="space-y-4">
+          {[
+            {
+              tag: "exam_bullet",
+              title: `The Foundation of ${chapter.title}`,
+              body: `The core principle of this chapter is that insurance operates as a mechanism for risk transfer and indemnification. Every concept in ${chapter.title} flows from this foundation.`,
+            },
+            {
+              tag: "exam_tip",
+              title: "Structuring Your Answers",
+              body: "For written questions, always: (1) state the relevant rule or principle, (2) apply it to the facts given, (3) reach a clear conclusion. Examiners reward precise use of terminology.",
+            },
+          ].map((insight, i) => (
+            <div key={i} className="rounded-xl border border-border bg-card p-5">
+              <div className="flex items-center gap-2.5 mb-3">
                 <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
                   <Lightbulb className="w-4 h-4 text-primary" />
                 </div>
                 <span
                   className={cn(
                     "text-xs font-medium px-2 py-0.5 rounded-full",
-                    resolveTagStyle(insight.tag)
+                    tagStyles[insight.tag] ?? "bg-secondary text-muted-foreground"
                   )}
                 >
-                  {insight.tag}
+                  {tagLabels[insight.tag] ?? insight.tag}
                 </span>
               </div>
-              {insight.exam_critical && (
-                <span className="text-xs font-medium text-yellow-500 shrink-0">
-                  ★ Exam Critical
-                </span>
-              )}
+              <h3 className="font-semibold text-foreground mb-2">{insight.title}</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">{insight.body}</p>
             </div>
-            <h3 className="font-semibold text-foreground mb-2">{insight.title}</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">{insight.body}</p>
-          </div>
-        ))}
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h2 className="text-lg font-semibold text-foreground mb-1">
+        Key Insights — Section {section.section_code}
+      </h2>
+      <p className="text-sm text-muted-foreground mb-6">{section.title}</p>
+
+      <div className="space-y-4">
+        {insights.map((insight, i) => {
+          const isTrap = insight.tag === "exam_trap";
+          return (
+            <div
+              key={i}
+              className={cn(
+                "rounded-xl border bg-card p-5",
+                isTrap ? "border-red-500/30 bg-red-500/5" : "border-border"
+              )}
+            >
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
+                    <Lightbulb className="w-4 h-4 text-primary" />
+                  </div>
+                  <span
+                    className={cn(
+                      "text-xs font-medium px-2 py-0.5 rounded-full",
+                      tagStyles[insight.tag] ?? "bg-secondary text-muted-foreground"
+                    )}
+                  >
+                    {tagLabels[insight.tag] ?? insight.tag}
+                  </span>
+                </div>
+                {isTrap && (
+                  <span className="text-xs font-medium text-red-400 shrink-0">
+                    ⚠ Common Trap
+                  </span>
+                )}
+              </div>
+              <h3 className="font-semibold text-foreground mb-2">{insight.title}</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">{insight.body}</p>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -931,78 +628,134 @@ export default function CourseDetailPage({
   params: Promise<{ code: string }>;
 }) {
   const { code } = use(params);
-  const course = courseData[code as CourseCode];
-  if (!course) notFound();
 
-  const flatIndex = useMemo(() => buildFlatIndex(course.units), [course]);
+  const [course, setCourse] = useState<DbCourse | null>(null);
+  const [chapters, setChapters] = useState<DbChapter[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [notFound404, setNotFound404] = useState(false);
 
-  const [activeUnitId, setActiveUnitId] = useState<number>(course.units[0].id);
-  const [activeSectionId, setActiveSectionId] = useState<string>(
-    course.units[0].sections[0].id
-  );
+  const [activeChapterId, setActiveChapterId] = useState<string>("");
+  const [activeSectionCode, setActiveSectionCode] = useState<string>("");
   const [activeTab, setActiveTab] = useState<ActiveTab>("content");
-  const [expandedUnitIds, setExpandedUnitIds] = useState<number[]>([
-    course.units[0].id,
-  ]);
+  const [expandedChapterIds, setExpandedChapterIds] = useState<string[]>([]);
   const [completedSections, setCompletedSections] = useState<Set<string>>(
     new Set()
   );
-  const [lessonSummary, setLessonSummary] = useState<SummaryLangContent | null>(null);
-  const [summaryLoading, setSummaryLoading] = useState(false);
 
-  const activeUnit = course.units.find((u) => u.id === activeUnitId)!;
-  const activeSection = activeUnit.sections.find(
-    (s) => s.id === activeSectionId
-  )!;
-
-  // Fetch summary_content from Supabase when section changes
   useEffect(() => {
-    if (!activeSection) return;
-    setSummaryLoading(true);
-    setLessonSummary(null);
-    supabase
-      .from("lessons")
-      .select("summary_content")
-      .ilike("title->>en", `%${activeSection.title}%`)
-      .limit(1)
-      .single()
-      .then(({ data }) => {
-        const sc = (data as { summary_content?: { en?: SummaryLangContent } } | null)
-          ?.summary_content?.en;
-        setLessonSummary(sc ?? null);
-        setSummaryLoading(false);
-      });
-  }, [activeSection?.title]);
+    async function load() {
+      setLoading(true);
 
-  const currentFlatIdx = flatIndex.findIndex(
-    (f) => f.unitId === activeUnitId && f.sectionId === activeSectionId
+      const { data: courseData, error: courseErr } = await supabase
+        .from("courses")
+        .select("id, code, title, description")
+        .ilike("code", code)
+        .single();
+
+      if (courseErr || !courseData) {
+        setNotFound404(true);
+        setLoading(false);
+        return;
+      }
+
+      const { data: chaptersData, error: chaptersErr } = await supabase
+        .from("chapters")
+        .select(
+          `id, chapter_number, title, order_index,
+           chapter_sections (
+             id, section_code, title, content_text, summary_content, order_index
+           )`
+        )
+        .eq("course_id", courseData.id)
+        .order("order_index");
+
+      if (chaptersErr || !chaptersData) {
+        setNotFound404(true);
+        setLoading(false);
+        return;
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sorted: DbChapter[] = (chaptersData as any[]).map((ch) => ({
+        id: ch.id,
+        chapter_number: ch.chapter_number,
+        title: ch.title,
+        order_index: ch.order_index,
+        sections: [...(ch.chapter_sections ?? [])].sort(
+          (a: DbSection, b: DbSection) => a.order_index - b.order_index
+        ),
+      }));
+
+      setCourse(courseData);
+      setChapters(sorted);
+
+      if (sorted.length > 0 && sorted[0].sections.length > 0) {
+        setActiveChapterId(sorted[0].id);
+        setActiveSectionCode(sorted[0].sections[0].section_code);
+        setExpandedChapterIds([sorted[0].id]);
+      }
+
+      setLoading(false);
+    }
+
+    load();
+  }, [code]);
+
+  const flatIndex = useMemo(() => buildFlatIndex(chapters), [chapters]);
+
+  const activeChapter = chapters.find((ch) => ch.id === activeChapterId);
+  const activeSection = activeChapter?.sections.find(
+    (s) => s.section_code === activeSectionCode
   );
 
-  const handleSelectSection = (unitId: number, sectionId: string) => {
-    setActiveUnitId(unitId);
-    setActiveSectionId(sectionId);
-    setActiveTab("content");
-    if (!expandedUnitIds.includes(unitId)) {
-      setExpandedUnitIds((prev) => [...prev, unitId]);
-    }
-  };
+  const currentFlatIdx = flatIndex.findIndex(
+    (f) => f.chapterId === activeChapterId && f.sectionCode === activeSectionCode
+  );
 
-  const handleToggleUnit = (unitId: number) => {
-    setExpandedUnitIds((prev) =>
-      prev.includes(unitId)
-        ? prev.filter((id) => id !== unitId)
-        : [...prev, unitId]
+  const handleSelectSection = useCallback(
+    (chapterId: string, sectionCode: string) => {
+      setActiveChapterId(chapterId);
+      setActiveSectionCode(sectionCode);
+      setActiveTab("content");
+      setExpandedChapterIds((prev) =>
+        prev.includes(chapterId) ? prev : [...prev, chapterId]
+      );
+    },
+    []
+  );
+
+  const handleToggleChapter = useCallback((chapterId: string) => {
+    setExpandedChapterIds((prev) =>
+      prev.includes(chapterId)
+        ? prev.filter((id) => id !== chapterId)
+        : [...prev, chapterId]
     );
-  };
+  }, []);
 
-  const handleNavigate = (entry: FlatEntry) => {
-    handleSelectSection(entry.unitId, entry.sectionId);
-  };
+  const handleNavigate = useCallback(
+    (entry: FlatEntry) => {
+      handleSelectSection(entry.chapterId, entry.sectionCode);
+    },
+    [handleSelectSection]
+  );
 
-  const handleMarkComplete = () => {
-    const key = `${activeUnitId}-${activeSectionId}`;
+  const handleMarkComplete = useCallback(() => {
+    const key = `${activeChapterId}-${activeSectionCode}`;
     setCompletedSections((prev) => new Set(prev).add(key));
-  };
+  }, [activeChapterId, activeSectionCode]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          <span className="text-sm">Loading course…</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (notFound404 || !course) notFound();
 
   return (
     <div className="min-h-screen bg-background">
@@ -1038,43 +791,49 @@ export default function CourseDetailPage({
         <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 items-start">
           <CourseSidebar
             course={course}
-            activeUnitId={activeUnitId}
-            activeSectionId={activeSectionId}
-            expandedUnitIds={expandedUnitIds}
+            chapters={chapters}
+            activeChapterId={activeChapterId}
+            activeSectionCode={activeSectionCode}
+            expandedChapterIds={expandedChapterIds}
             completedSections={completedSections}
             onSelectSection={handleSelectSection}
-            onToggleUnit={handleToggleUnit}
+            onToggleChapter={handleToggleChapter}
           />
 
           {/* Main content */}
           <div className="flex-1 min-w-0 rounded-xl border border-border bg-card p-6 sm:p-8">
-            <TabBar activeTab={activeTab} onChange={setActiveTab} />
+            {activeChapter && activeSection ? (
+              <>
+                <TabBar activeTab={activeTab} onChange={setActiveTab} />
 
-            {activeTab === "content" && (
-              <ContentTab
-                course={course}
-                unit={activeUnit}
-                section={activeSection}
-                flatIndex={flatIndex}
-                currentFlatIdx={currentFlatIdx}
-                onNavigate={handleNavigate}
-                onMarkComplete={handleMarkComplete}
-              />
-            )}
-            {activeTab === "summary" && (
-              <SummaryTab
-                unit={activeUnit}
-                section={activeSection}
-                summary={lessonSummary}
-                loading={summaryLoading}
-              />
-            )}
-            {activeTab === "insights" && (
-              <InsightsTab
-                unit={activeUnit}
-                summary={lessonSummary}
-                loading={summaryLoading}
-              />
+                {activeTab === "content" && (
+                  <ContentTab
+                    course={course}
+                    chapter={activeChapter}
+                    section={activeSection}
+                    flatIndex={flatIndex}
+                    currentFlatIdx={currentFlatIdx}
+                    onNavigate={handleNavigate}
+                    onMarkComplete={handleMarkComplete}
+                  />
+                )}
+                {activeTab === "summary" && (
+                  <SummaryTab
+                    chapter={activeChapter}
+                    section={activeSection}
+                  />
+                )}
+                {activeTab === "insights" && (
+                  <InsightsTab
+                    chapter={activeChapter}
+                    section={activeSection}
+                  />
+                )}
+              </>
+            ) : (
+              <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">
+                Select a section from the sidebar to begin.
+              </div>
             )}
           </div>
         </div>

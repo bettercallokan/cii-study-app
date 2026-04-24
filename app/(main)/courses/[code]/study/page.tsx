@@ -12,185 +12,37 @@ import {
   CheckCircle2,
   GraduationCap,
   BookOpen,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PdfViewer } from "@/components/pdf-viewer";
 import { AiChat } from "@/components/ai-chat";
 import { supabase } from "@/utils/supabase/client";
 
-// Course data (shared with main course page)
-const courseData = {
-  w01: {
-    title: "Award in General Insurance",
-    code: "W01",
-    units: [
-      {
-        id: 1,
-        title: "Risk and insurance",
-        sections: [
-          { id: "A", title: "The role of risk in insurance" },
-          { id: "B", title: "Categories of risk" },
-          { id: "C", title: "Features of insurable risks" },
-          { id: "D", title: "Components of risk" },
-          { id: "E", title: "Insurance as a risk transfer mechanism" },
-          { id: "F", title: "Pooling of risks" },
-          { id: "G", title: "Self-insurance" },
-          { id: "H", title: "Co-insurance and dual insurance" },
-          { id: "I", title: "Benefits of insurance" },
-        ],
-      },
-      {
-        id: 2,
-        title: "The insurance market",
-        sections: [
-          { id: "A", title: "Market structure" },
-          { id: "B", title: "Types of insurer" },
-          { id: "C", title: "Reinsurance" },
-          { id: "D", title: "Lloyd's" },
-          { id: "E", title: "Intermediaries" },
-          { id: "F", title: "Distribution channels" },
-          { id: "G", title: "Influence of the internet and technology" },
-          { id: "H", title: "Key professional roles" },
-          { id: "I", title: "Classes of insurance" },
-        ],
-      },
-      {
-        id: 3,
-        title: "Contract and agency",
-        sections: [
-          { id: "A", title: "Essentials of a valid contract" },
-          { id: "B", title: "Offer and acceptance" },
-          { id: "C", title: "Consideration" },
-          { id: "D", title: "Intention to create legal relations" },
-          { id: "E", title: "Capacity to contract" },
-          { id: "F", title: "Cancellation of insurance contracts" },
-          { id: "G", title: "Agency" },
-          { id: "H", title: "Terms of business agreements (TOBAs)" },
-        ],
-      },
-      {
-        id: 4,
-        title: "Insurable interest",
-        sections: [
-          { id: "A", title: "What is insurable interest?" },
-          { id: "B", title: "When does insurable interest exist?" },
-          { id: "C", title: "How is insurable interest applied?" },
-        ],
-      },
-      {
-        id: 5,
-        title: "Disclosure and representation",
-        sections: [
-          { id: "A", title: "Principle of good faith" },
-          { id: "B", title: "Duty of disclosure" },
-          { id: "C", title: "Material information" },
-          { id: "D", title: "Consequences of non-disclosure and misrepresentation" },
-          { id: "E", title: "Compulsory insurances" },
-        ],
-      },
-      {
-        id: 6,
-        title: "Proximate cause",
-        sections: [
-          { id: "A", title: "Definition of proximate cause" },
-          { id: "B", title: "Modification by policy wordings" },
-        ],
-      },
-      {
-        id: 7,
-        title: "Indemnity",
-        sections: [
-          { id: "A", title: "What is indemnity?" },
-          { id: "B", title: "How is indemnity applied?" },
-          { id: "C", title: "Measuring indemnity" },
-          { id: "D", title: "Modifying indemnity" },
-          { id: "E", title: "Limiting factors" },
-        ],
-      },
-      {
-        id: 8,
-        title: "Contribution and subrogation",
-        sections: [
-          { id: "A", title: "Contribution" },
-          { id: "B", title: "How does contribution arise?" },
-          { id: "C", title: "How is contribution applied?" },
-          { id: "D", title: "Subrogation" },
-          { id: "E", title: "Insurers' subrogation rights" },
-          { id: "F", title: "Where subrogation rights don't apply" },
-        ],
-      },
-      {
-        id: 9,
-        title: "Insurance regulation",
-        sections: [
-          { id: "A", title: "Role of the insurance regulator" },
-          { id: "B", title: "International Association of Insurance Supervisors (IAIS)" },
-          { id: "C", title: "Capital adequacy of insurers" },
-          { id: "D", title: "Combatting financial crime" },
-          { id: "E", title: "Impact of fraud on the insurance industry" },
-        ],
-      },
-      {
-        id: 10,
-        title: "Ethics, corporate governance and internal controls",
-        sections: [
-          { id: "A", title: "Ethical standards" },
-          { id: "B", title: "Corporate governance" },
-          { id: "C", title: "Internal control system" },
-          { id: "D", title: "Data protection" },
-        ],
-      },
-    ],
-  },
-  wce: {
-    title: "Insurance Claims Handling",
-    code: "WCE",
-    units: [
-      {
-        id: 1,
-        title: "General Principles of Claims",
-        sections: [
-          { id: "A", title: "Legal requirements for a valid claim" },
-          { id: "B", title: "Policy conditions relating to claims" },
-          { id: "C", title: "Documentary evidence" },
-        ],
-      },
-      {
-        id: 2,
-        title: "Insurance Products",
-        sections: [
-          { id: "A", title: "Motor policies" },
-          { id: "B", title: "Household, gadget and travel policies" },
-        ],
-      },
-    ],
-  },
-  wue: {
-    title: "Insurance Underwriting",
-    code: "WUE",
-    units: [
-      {
-        id: 1,
-        title: "Material Facts and Disclosure",
-        sections: [
-          { id: "A", title: "The duty of good faith" },
-          { id: "B", title: "Material facts" },
-          { id: "C", title: "Perils and hazards" },
-        ],
-      },
-      {
-        id: 2,
-        title: "Underwriting Procedures",
-        sections: [
-          { id: "A", title: "Proposal forms and questions" },
-          { id: "B", title: "Quotations" },
-        ],
-      },
-    ],
-  },
-} as const;
+// ─── Types ────────────────────────────────────────────────────
 
-type CourseCode = keyof typeof courseData;
+type DbSection = {
+  id: string;
+  section_code: string;
+  title: string;
+  order_index: number;
+};
+
+type DbChapter = {
+  id: string;
+  chapter_number: string;
+  title: string;
+  order_index: number;
+  sections: DbSection[];
+};
+
+type DbCourse = {
+  id: string;
+  code: string;
+  title: string;
+};
+
+// ─── Main Page ────────────────────────────────────────────────
 
 export default function StudyModePage({
   params,
@@ -198,21 +50,91 @@ export default function StudyModePage({
   params: Promise<{ code: string }>;
 }) {
   const { code } = use(params);
-  const course = courseData[code as CourseCode];
-  if (!course) notFound();
-
   const searchParams = useSearchParams();
   const effectivePath = searchParams.get("file") ?? `${code}-study-text.pdf`;
+
+  const [course, setCourse] = useState<DbCourse | null>(null);
+  const [chapters, setChapters] = useState<DbChapter[]>([]);
+  const [courseLoading, setCourseLoading] = useState(true);
+  const [notFound404, setNotFound404] = useState(false);
 
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
 
-  // Scroll to top on mount so the header is always visible
+  const [isChatOpen, setIsChatOpen] = useState(true);
+  const [activeChapterId, setActiveChapterId] = useState<string>("");
+  const [activeSectionCode, setActiveSectionCode] = useState<string>("");
+  const [expandedChapterIds, setExpandedChapterIds] = useState<string[]>([]);
+  const [completedSections, setCompletedSections] = useState<Set<string>>(new Set());
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  // Scroll to top on mount
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
 
+  // Fetch course + chapters from Supabase
+  useEffect(() => {
+    async function load() {
+      setCourseLoading(true);
+
+      const { data: courseData, error: courseErr } = await supabase
+        .from("courses")
+        .select("id, code, title")
+        .ilike("code", code)
+        .single();
+
+      if (courseErr || !courseData) {
+        setNotFound404(true);
+        setCourseLoading(false);
+        return;
+      }
+
+      const { data: chaptersData, error: chaptersErr } = await supabase
+        .from("chapters")
+        .select(
+          `id, chapter_number, title, order_index,
+           chapter_sections (
+             id, section_code, title, order_index
+           )`
+        )
+        .eq("course_id", courseData.id)
+        .order("order_index");
+
+      if (chaptersErr || !chaptersData) {
+        setNotFound404(true);
+        setCourseLoading(false);
+        return;
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sorted: DbChapter[] = (chaptersData as any[]).map((ch) => ({
+        id: ch.id,
+        chapter_number: ch.chapter_number,
+        title: ch.title,
+        order_index: ch.order_index,
+        sections: [...(ch.chapter_sections ?? [])].sort(
+          (a: DbSection, b: DbSection) => a.order_index - b.order_index
+        ),
+      }));
+
+      setCourse(courseData);
+      setChapters(sorted);
+
+      if (sorted.length > 0 && sorted[0].sections.length > 0) {
+        setActiveChapterId(sorted[0].id);
+        setActiveSectionCode(sorted[0].sections[0].section_code);
+        setExpandedChapterIds([sorted[0].id]);
+      }
+
+      setCourseLoading(false);
+    }
+
+    load();
+  }, [code]);
+
+  // Fetch signed PDF URL
   useEffect(() => {
     let cancelled = false;
     setPdfLoading(true);
@@ -232,37 +154,29 @@ export default function StudyModePage({
         setPdfLoading(false);
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [effectivePath]);
 
-  const [isChatOpen, setIsChatOpen] = useState(true);
-  const [activeUnit, setActiveUnit] = useState(1);
-  const [activeSection, setActiveSection] = useState("A");
-  const [expandedUnits, setExpandedUnits] = useState<number[]>([1]);
-  const [completedSections, setCompletedSections] = useState<Set<string>>(new Set());
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-
-  const currentUnit = course.units.find((u) => u.id === activeUnit);
-  const currentSection = currentUnit?.sections.find((s) => s.id === activeSection);
-
-  const toggleUnit = (unitId: number) => {
-    setExpandedUnits((prev) =>
-      prev.includes(unitId)
-        ? prev.filter((id) => id !== unitId)
-        : [...prev, unitId]
+  const toggleChapter = (chapterId: string) => {
+    setExpandedChapterIds((prev) =>
+      prev.includes(chapterId)
+        ? prev.filter((id) => id !== chapterId)
+        : [...prev, chapterId]
     );
   };
 
-  const selectSection = (unitId: number, sectionId: string) => {
-    setActiveUnit(unitId);
-    setActiveSection(sectionId);
-    if (!expandedUnits.includes(unitId)) {
-      setExpandedUnits((prev) => [...prev, unitId]);
+  const selectSection = (chapterId: string, sectionCode: string) => {
+    setActiveChapterId(chapterId);
+    setActiveSectionCode(sectionCode);
+    if (!expandedChapterIds.includes(chapterId)) {
+      setExpandedChapterIds((prev) => [...prev, chapterId]);
     }
   };
 
   const toggleComplete = () => {
-    const key = `${activeUnit}-${activeSection}`;
+    const key = `${activeChapterId}-${activeSectionCode}`;
     setCompletedSections((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(key)) {
@@ -274,9 +188,16 @@ export default function StudyModePage({
     });
   };
 
-  const pdfName = effectivePath
-    .split("/").pop()?.replace(/\.pdf$/i, "") ?? effectivePath;
-  const isComplete = completedSections.has(`${activeUnit}-${activeSection}`);
+  const pdfName =
+    effectivePath.split("/").pop()?.replace(/\.pdf$/i, "") ?? effectivePath;
+  const isComplete = completedSections.has(`${activeChapterId}-${activeSectionCode}`);
+
+  const currentChapter = chapters.find((ch) => ch.id === activeChapterId);
+  const currentSection = currentChapter?.sections.find(
+    (s) => s.section_code === activeSectionCode
+  );
+
+  if (notFound404) notFound();
 
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
@@ -295,7 +216,9 @@ export default function StudyModePage({
               <GraduationCap className="w-4 h-4 text-primary" />
             </div>
             <div>
-              <h1 className="text-sm font-semibold text-foreground">{course.code} Study Mode</h1>
+              <h1 className="text-sm font-semibold text-foreground">
+                {course?.code ?? code.toUpperCase()} Study Mode
+              </h1>
               <p className="text-[11px] text-muted-foreground hidden sm:block">
                 {currentSection?.title}
               </p>
@@ -354,100 +277,112 @@ export default function StudyModePage({
             <div className="px-3 py-3 mb-2 rounded-lg bg-secondary/30">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary text-primary-foreground">
-                  {course.code}
+                  {course?.code ?? code.toUpperCase()}
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground truncate">{course.title}</p>
+              <p className="text-xs text-muted-foreground truncate">
+                {course?.title}
+              </p>
             </div>
 
             {/* Navigation */}
-            <nav className="space-y-1">
-              {course.units.map((unit) => {
-                const isExpanded = expandedUnits.includes(unit.id);
-                const isActiveUnit = unit.id === activeUnit;
-                const completedInUnit = unit.sections.filter((s) =>
-                  completedSections.has(`${unit.id}-${s.id}`)
-                ).length;
+            {courseLoading ? (
+              <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="text-xs">Loading…</span>
+              </div>
+            ) : (
+              <nav className="space-y-1">
+                {chapters.map((chapter) => {
+                  const isExpanded = expandedChapterIds.includes(chapter.id);
+                  const isActiveChapter = chapter.id === activeChapterId;
+                  const completedInChapter = chapter.sections.filter((s) =>
+                    completedSections.has(`${chapter.id}-${s.section_code}`)
+                  ).length;
 
-                return (
-                  <div key={unit.id}>
-                    <button
-                      onClick={() => toggleUnit(unit.id)}
-                      className={cn(
-                        "w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-left transition-colors",
-                        isActiveUnit
-                          ? "bg-primary/10 text-primary"
-                          : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                      )}
-                    >
-                      <span className="text-xs font-bold w-5 shrink-0 tabular-nums">
-                        {unit.id}
-                      </span>
-                      <span className="text-xs font-medium flex-1 leading-snug truncate">
-                        {unit.title}
-                      </span>
-                      {completedInUnit > 0 && (
-                        <span className="text-[10px] text-green-500 font-medium shrink-0">
-                          {completedInUnit}/{unit.sections.length}
-                        </span>
-                      )}
-                      <ChevronDown
+                  return (
+                    <div key={chapter.id}>
+                      <button
+                        onClick={() => toggleChapter(chapter.id)}
                         className={cn(
-                          "w-3.5 h-3.5 shrink-0 transition-transform",
-                          isExpanded && "rotate-180"
+                          "w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-left transition-colors",
+                          isActiveChapter
+                            ? "bg-primary/10 text-primary"
+                            : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
                         )}
-                      />
-                    </button>
+                      >
+                        <span className="text-xs font-bold w-5 shrink-0 tabular-nums">
+                          {chapter.chapter_number}
+                        </span>
+                        <span className="text-xs font-medium flex-1 leading-snug truncate">
+                          {chapter.title}
+                        </span>
+                        {completedInChapter > 0 && (
+                          <span className="text-[10px] text-green-500 font-medium shrink-0">
+                            {completedInChapter}/{chapter.sections.length}
+                          </span>
+                        )}
+                        <ChevronDown
+                          className={cn(
+                            "w-3.5 h-3.5 shrink-0 transition-transform",
+                            isExpanded && "rotate-180"
+                          )}
+                        />
+                      </button>
 
-                    {isExpanded && (
-                      <ul className="mt-0.5 ml-3 pl-3 border-l border-border space-y-0.5 mb-1">
-                        {unit.sections.map((section) => {
-                          const isActive = isActiveUnit && section.id === activeSection;
-                          const key = `${unit.id}-${section.id}`;
-                          const isDone = completedSections.has(key);
+                      {isExpanded && (
+                        <ul className="mt-0.5 ml-3 pl-3 border-l border-border space-y-0.5 mb-1">
+                          {chapter.sections.map((section) => {
+                            const isActive =
+                              isActiveChapter &&
+                              section.section_code === activeSectionCode;
+                            const key = `${chapter.id}-${section.section_code}`;
+                            const isDone = completedSections.has(key);
 
-                          return (
-                            <li key={section.id}>
-                              <button
-                                onClick={() => {
-                                  selectSection(unit.id, section.id);
-                                  // Close sidebar on mobile after selection
-                                  if (window.innerWidth < 1024) {
-                                    setIsSidebarOpen(false);
-                                  }
-                                }}
-                                className={cn(
-                                  "w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-colors",
-                                  isActive
-                                    ? "bg-primary/10 text-primary"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                                )}
-                              >
-                                {isDone ? (
-                                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-green-500" />
-                                ) : (
-                                  <span
-                                    className={cn(
-                                      "text-[10px] font-bold w-3.5 shrink-0 tabular-nums",
-                                      isActive ? "text-primary" : "text-muted-foreground"
-                                    )}
-                                  >
-                                    {section.id}
+                            return (
+                              <li key={section.section_code}>
+                                <button
+                                  onClick={() => {
+                                    selectSection(chapter.id, section.section_code);
+                                    if (window.innerWidth < 1024) {
+                                      setIsSidebarOpen(false);
+                                    }
+                                  }}
+                                  className={cn(
+                                    "w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-colors",
+                                    isActive
+                                      ? "bg-primary/10 text-primary"
+                                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                                  )}
+                                >
+                                  {isDone ? (
+                                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-green-500" />
+                                  ) : (
+                                    <span
+                                      className={cn(
+                                        "text-[10px] font-bold w-3.5 shrink-0 tabular-nums",
+                                        isActive
+                                          ? "text-primary"
+                                          : "text-muted-foreground"
+                                      )}
+                                    >
+                                      {section.section_code}
+                                    </span>
+                                  )}
+                                  <span className="text-xs leading-snug truncate">
+                                    {section.title}
                                   </span>
-                                )}
-                                <span className="text-xs leading-snug truncate">
-                                  {section.title}
-                                </span>
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </div>
-                );
-              })}
-            </nav>
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })}
+              </nav>
+            )}
           </div>
         </aside>
 
