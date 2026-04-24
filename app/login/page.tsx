@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { GraduationCap, Mail, ArrowRight, Loader2, CheckCircle2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { GraduationCap, Mail, ArrowRight, Loader2, CheckCircle2, Clock } from "lucide-react";
 import { createBrowserClient } from "@supabase/ssr";
 
 function createClient() {
@@ -11,19 +11,58 @@ function createClient() {
   );
 }
 
-type State = "idle" | "loading" | "sent" | "error" | "not_allowed";
+type State = "idle" | "loading" | "sent" | "error" | "not_allowed" | "rate_limited";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ??
   (typeof window !== "undefined" ? window.location.origin : "https://certifocus.com");
 
+const COOLDOWN_KEY = "otp_cooldown_until";
+const COOLDOWN_SECONDS = 60;
+
+function isRateLimit(msg: string, status?: number) {
+  return (
+    status === 429 ||
+    msg.toLowerCase().includes("rate limit") ||
+    msg.toLowerCase().includes("too many") ||
+    msg.toLowerCase().includes("security purposes")
+  );
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [state, setState] = useState<State>("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [cooldown, setCooldown] = useState(0);
+
+  // Restore cooldown from localStorage on mount
+  useEffect(() => {
+    const until = parseInt(localStorage.getItem(COOLDOWN_KEY) ?? "0", 10);
+    const remaining = Math.ceil((until - Date.now()) / 1000);
+    if (remaining > 0) setCooldown(remaining);
+  }, []);
+
+  // Tick down cooldown every second
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setInterval(() => {
+      setCooldown((prev) => {
+        if (prev <= 1) { clearInterval(t); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [cooldown]);
+
+  function startCooldown(seconds = COOLDOWN_SECONDS) {
+    localStorage.setItem(COOLDOWN_KEY, String(Date.now() + seconds * 1000));
+    setCooldown(seconds);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (cooldown > 0) return;
+
     const trimmed = email.trim().toLowerCase();
     if (!trimmed) return;
 
@@ -59,12 +98,18 @@ export default function LoginPage() {
     });
 
     if (otpErr) {
-      setState("error");
-      setErrorMsg(otpErr.message);
+      if (isRateLimit(otpErr.message, otpErr.status)) {
+        setState("rate_limited");
+        startCooldown(COOLDOWN_SECONDS);
+      } else {
+        setState("error");
+        setErrorMsg(otpErr.message);
+      }
       return;
     }
 
     setState("sent");
+    startCooldown(COOLDOWN_SECONDS);
   }
 
   return (
@@ -82,7 +127,7 @@ export default function LoginPage() {
         {/* Card */}
         <div className="rounded-2xl border border-border bg-card p-6">
           {state === "sent" ? (
-            <SentState email={email} onBack={() => setState("idle")} />
+            <SentState email={email} cooldown={cooldown} onBack={() => setState("idle")} />
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
@@ -130,16 +175,31 @@ export default function LoginPage() {
                   {errorMsg || "Something went wrong. Please try again."}
                 </div>
               )}
+              {state === "rate_limited" && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-400 flex items-start gap-2">
+                  <Clock className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>
+                    Too many requests. Please wait{" "}
+                    <span className="font-semibold tabular-nums">{cooldown}s</span>{" "}
+                    before trying again.
+                  </span>
+                </div>
+              )}
 
               <button
                 type="submit"
-                disabled={state === "loading"}
+                disabled={state === "loading" || cooldown > 0}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
               >
                 {state === "loading" ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
                     Checking…
+                  </>
+                ) : cooldown > 0 ? (
+                  <>
+                    <Clock className="w-4 h-4" />
+                    Retry in {cooldown}s
                   </>
                 ) : (
                   <>
@@ -162,9 +222,11 @@ export default function LoginPage() {
 
 function SentState({
   email,
+  cooldown,
   onBack,
 }: {
   email: string;
+  cooldown: number;
   onBack: () => void;
 }) {
   return (
@@ -183,12 +245,18 @@ function SentState({
       </div>
       <p className="text-xs text-muted-foreground">
         Didn&apos;t receive it? Check your spam folder or{" "}
-        <button
-          onClick={onBack}
-          className="text-primary underline underline-offset-2"
-        >
-          try again
-        </button>
+        {cooldown > 0 ? (
+          <span className="text-muted-foreground tabular-nums">
+            retry in {cooldown}s
+          </span>
+        ) : (
+          <button
+            onClick={onBack}
+            className="text-primary underline underline-offset-2"
+          >
+            try again
+          </button>
+        )}
         .
       </p>
     </div>
