@@ -62,7 +62,7 @@ export default function LoginPage() {
     return () => clearInterval(t);
   }, [cooldown]);
 
-  function startCooldown(seconds = COOLDOWN_SECONDS) {
+  function startCooldown(seconds = COOLDOWN_SENT) {
     localStorage.setItem(COOLDOWN_KEY, String(Date.now() + seconds * 1000));
     setCooldown(seconds);
   }
