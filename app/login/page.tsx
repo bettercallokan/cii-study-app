@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { GraduationCap, Mail, ArrowRight, Loader2, CheckCircle2, Clock } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { GraduationCap, Mail, ArrowRight, Loader2, Clock } from "lucide-react";
 import { createBrowserClient } from "@supabase/ssr";
 
 function createClient() {
@@ -11,15 +12,11 @@ function createClient() {
   );
 }
 
-type State = "idle" | "loading" | "sent" | "error" | "not_allowed" | "rate_limited";
-
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  (typeof window !== "undefined" ? window.location.origin : "https://certifocus.com");
+type State = "idle" | "loading" | "sent" | "verifying" | "error" | "not_allowed" | "rate_limited";
 
 const COOLDOWN_KEY = "otp_cooldown_until";
-const COOLDOWN_SENT = 60;       // seconds after a successful send
-const COOLDOWN_RATE_LIMIT = 300; // 5 min after a rate-limit error
+const COOLDOWN_SENT = 60;
+const COOLDOWN_RATE_LIMIT = 300;
 
 function isRateLimit(msg: string, status?: number) {
   return (
@@ -38,19 +35,20 @@ function formatCooldown(seconds: number): string {
 }
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
+  const [token, setToken] = useState("");
   const [state, setState] = useState<State>("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [cooldown, setCooldown] = useState(0);
+  const otpInputRef = useRef<HTMLInputElement>(null);
 
-  // Restore cooldown from localStorage on mount
   useEffect(() => {
     const until = parseInt(localStorage.getItem(COOLDOWN_KEY) ?? "0", 10);
     const remaining = Math.ceil((until - Date.now()) / 1000);
     if (remaining > 0) setCooldown(remaining);
   }, []);
 
-  // Tick down cooldown every second
   useEffect(() => {
     if (cooldown <= 0) return;
     const t = setInterval(() => {
@@ -62,12 +60,18 @@ export default function LoginPage() {
     return () => clearInterval(t);
   }, [cooldown]);
 
+  useEffect(() => {
+    if (state === "sent") {
+      setTimeout(() => otpInputRef.current?.focus(), 100);
+    }
+  }, [state]);
+
   function startCooldown(seconds = COOLDOWN_SENT) {
     localStorage.setItem(COOLDOWN_KEY, String(Date.now() + seconds * 1000));
     setCooldown(seconds);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSendOtp(e: React.FormEvent) {
     e.preventDefault();
     if (cooldown > 0) return;
 
@@ -79,7 +83,6 @@ export default function LoginPage() {
 
     const supabase = createClient();
 
-    // Check allowlist first
     const { data: allowed, error: rpcErr } = await supabase.rpc(
       "is_email_allowed",
       { check_email: trimmed }
@@ -96,13 +99,8 @@ export default function LoginPage() {
       return;
     }
 
-    // Send magic link
     const { error: otpErr } = await supabase.auth.signInWithOtp({
       email: trimmed,
-      options: {
-        emailRedirectTo: `${SITE_URL}/auth/callback`,
-        shouldCreateUser: true,
-      },
     });
 
     if (otpErr) {
@@ -120,10 +118,33 @@ export default function LoginPage() {
     startCooldown(COOLDOWN_SENT);
   }
 
+  async function handleVerifyOtp(e: React.FormEvent) {
+    e.preventDefault();
+    if (!token.trim()) return;
+
+    setState("verifying");
+    setErrorMsg("");
+
+    const supabase = createClient();
+
+    const { error } = await supabase.auth.verifyOtp({
+      email: email.trim().toLowerCase(),
+      token: token.trim(),
+      type: "email",
+    });
+
+    if (error) {
+      setState("sent");
+      setErrorMsg(error.message || "Invalid code. Please try again.");
+      return;
+    }
+
+    router.push("/");
+  }
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 mb-4">
             <GraduationCap className="w-7 h-7 text-primary" />
@@ -132,26 +153,95 @@ export default function LoginPage() {
           <p className="text-sm text-muted-foreground mt-1">Exam Preparation Platform</p>
         </div>
 
-        {/* Card */}
         <div className="rounded-2xl border border-border bg-card p-6">
-          {state === "sent" ? (
-            <SentState email={email} cooldown={cooldown} onBack={() => setState("idle")} />
+          {state === "sent" || state === "verifying" ? (
+            <form onSubmit={handleVerifyOtp} className="space-y-4">
+              <div>
+                <h2 className="text-base font-semibold text-foreground mb-1">
+                  Check your email
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  We sent a 6-digit code to{" "}
+                  <span className="font-medium text-foreground">{email}</span>.
+                  Enter it below to sign in.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="token" className="text-xs font-medium text-muted-foreground">
+                  6-digit code
+                </label>
+                <input
+                  ref={otpInputRef}
+                  id="token"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  value={token}
+                  onChange={(e) => {
+                    setToken(e.target.value.replace(/\D/g, ""));
+                    setErrorMsg("");
+                  }}
+                  placeholder="000000"
+                  required
+                  className="w-full px-4 py-2.5 rounded-lg bg-secondary border border-border text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-colors tracking-widest text-center"
+                />
+              </div>
+
+              {errorMsg && (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  {errorMsg}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={state === "verifying" || token.length < 6}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+              >
+                {state === "verifying" ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Verifying…
+                  </>
+                ) : (
+                  <>
+                    Verify code
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+
+              <p className="text-xs text-muted-foreground text-center">
+                Didn&apos;t receive it? Check your spam folder or{" "}
+                {cooldown > 0 ? (
+                  <span className="tabular-nums">retry in {formatCooldown(cooldown)}</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { setState("idle"); setToken(""); }}
+                    className="text-primary underline underline-offset-2"
+                  >
+                    try again
+                  </button>
+                )}
+                .
+              </p>
+            </form>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSendOtp} className="space-y-4">
               <div>
                 <h2 className="text-base font-semibold text-foreground mb-1">
                   Sign in
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                  Enter your email to receive a secure login link.
+                  Enter your email to receive a one-time code.
                 </p>
               </div>
 
               <div className="space-y-2">
-                <label
-                  htmlFor="email"
-                  className="text-xs font-medium text-muted-foreground"
-                >
+                <label htmlFor="email" className="text-xs font-medium text-muted-foreground">
                   Email address
                 </label>
                 <div className="relative">
@@ -172,7 +262,6 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {/* Error states */}
               {state === "not_allowed" && (
                 <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
                   This email is not authorised for access. Please contact your administrator.
@@ -211,7 +300,7 @@ export default function LoginPage() {
                   </>
                 ) : (
                   <>
-                    Send magic link
+                    Send code
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
@@ -224,49 +313,6 @@ export default function LoginPage() {
           Invite-only access · CII Exam Preparation
         </p>
       </div>
-    </div>
-  );
-}
-
-function SentState({
-  email,
-  cooldown,
-  onBack,
-}: {
-  email: string;
-  cooldown: number;
-  onBack: () => void;
-}) {
-  return (
-    <div className="text-center space-y-4">
-      <div className="flex items-center justify-center w-12 h-12 rounded-full bg-green-500/10 border border-green-500/20 mx-auto">
-        <CheckCircle2 className="w-6 h-6 text-green-500" />
-      </div>
-      <div>
-        <h2 className="text-base font-semibold text-foreground">Check your email</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          We sent a login link to{" "}
-          <span className="font-medium text-foreground">{email}</span>.
-          <br />
-          Click the link to sign in.
-        </p>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Didn&apos;t receive it? Check your spam folder or{" "}
-        {cooldown > 0 ? (
-          <span className="text-muted-foreground tabular-nums">
-            retry in {formatCooldown(cooldown)}
-          </span>
-        ) : (
-          <button
-            onClick={onBack}
-            className="text-primary underline underline-offset-2"
-          >
-            try again
-          </button>
-        )}
-        .
-      </p>
     </div>
   );
 }
