@@ -4,57 +4,54 @@ import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────
 
-type Variant = "example" | "consider" | "note";
+type SpecialVariant = "example" | "consider" | "beaware";
 
 type Block =
   | { type: "paragraph"; text: string }
-  | { type: "heading"; prefix: string; rest: string }
+  | { type: "heading"; code: string; title: string }
   | { type: "bullets"; items: string[] }
-  | { type: "special"; tag: string; body: string; variant: Variant }
+  | { type: "special"; tag: string; body: string; variant: SpecialVariant }
   | { type: "table"; rows: string[][] };
 
 // ─── Parser ───────────────────────────────────────────────────
 
 function parseBlocks(text: string): Block[] {
   const blocks: Block[] = [];
-  const paragraphs = text.split(/\n{2,}/);
+  const rawBlocks = text.split(/\n{2,}/);
 
-  for (const para of paragraphs) {
-    const trimmed = para.trim();
+  for (const raw of rawBlocks) {
+    const trimmed = raw.trim();
     if (!trimmed) continue;
 
-    // [TAG] body  →  special box
+    const lines = trimmed.split("\n").map((l) => l.trim()).filter(Boolean);
+
+    // a/b/c: [EXAMPLE...] / [CONSIDER THIS] / [BE AWARE] → special box
     if (trimmed.startsWith("[")) {
       const m = trimmed.match(/^\[([^\]]+)\]([\s\S]*)$/);
       if (m) {
         const tag = m[1].trim();
         const body = m[2].trim();
         const upper = tag.toUpperCase();
-        const variant: Variant = upper.startsWith("EXAMPLE")
+        const variant: SpecialVariant = upper.startsWith("EXAMPLE")
           ? "example"
           : upper.startsWith("CONSIDER")
           ? "consider"
-          : "note";
+          : "beaware";
         blocks.push({ type: "special", tag, body, variant });
         continue;
       }
     }
 
-    const lines = trimmed.split("\n").map((l) => l.trim()).filter(Boolean);
-
-    // Table: majority of lines contain |
-    const pipedLines = lines.filter((l) => l.includes("|"));
-    if (lines.length >= 2 && pipedLines.length >= Math.ceil(lines.length * 0.6)) {
-      const rows = pipedLines.map((l) =>
-        l.split("|").map((c) => c.trim()).filter(Boolean)
-      );
-      if (rows.length >= 2) {
-        blocks.push({ type: "table", rows });
+    // d: Heading — single-line block matching A1, B2, C3 … pattern
+    if (lines.length === 1) {
+      const hm = trimmed.match(/^([A-Z]\d+)\s+(.+)$/);
+      if (hm) {
+        blocks.push({ type: "heading", code: hm[1], title: hm[2] });
         continue;
       }
     }
 
-    // All-bullet block
+    // e: Bullet list — every line starts with •
     if (lines.length > 0 && lines.every((l) => l.startsWith("•"))) {
       blocks.push({
         type: "bullets",
@@ -63,87 +60,46 @@ function parseBlocks(text: string): Block[] {
       continue;
     }
 
-    // Mixed block: bullets interspersed with text — split into sub-blocks
-    const hasBullets = lines.some((l) => l.startsWith("•"));
-    if (hasBullets && lines.length > 1) {
-      let pendingText: string[] = [];
-      let pendingBullets: string[] = [];
-
-      const flushText = () => {
-        if (!pendingText.length) return;
-        const txt = pendingText.join(" ").trim();
-        if (txt) pushText(txt);
-        pendingText = [];
-      };
-      const flushBullets = () => {
-        if (!pendingBullets.length) return;
-        blocks.push({ type: "bullets", items: pendingBullets });
-        pendingBullets = [];
-      };
-      const pushText = (txt: string) => {
-        const hm = txt.match(/^([A-Z]\d+(?:\.\d+)?)\s+(.+)$/);
-        if (hm) blocks.push({ type: "heading", prefix: hm[1], rest: hm[2] });
-        else blocks.push({ type: "paragraph", text: txt });
-      };
-
-      for (const line of lines) {
-        if (line.startsWith("•")) {
-          flushText();
-          pendingBullets.push(line.replace(/^•\s*/, "").trim());
-        } else {
-          flushBullets();
-          pendingText.push(line);
-        }
-      }
-      flushText();
-      flushBullets();
+    // f: Table — contains | and at least 2 matching lines
+    const pipedLines = lines.filter((l) => l.includes("|"));
+    if (pipedLines.length >= 2) {
+      const rows = pipedLines.map((l) =>
+        l.split("|").map((c) => c.trim()).filter(Boolean)
+      );
+      blocks.push({ type: "table", rows });
       continue;
     }
 
-    // Heading: single line matching "A1 ..." or "A1.2 ..."
-    if (lines.length === 1) {
-      const hm = trimmed.match(/^([A-Z]\d+(?:\.\d+)?)\s+(.+)$/);
-      if (hm) {
-        blocks.push({ type: "heading", prefix: hm[1], rest: hm[2] });
-        continue;
-      }
-    }
-
-    // Default: paragraph
+    // g: Normal paragraph
     blocks.push({ type: "paragraph", text: lines.join(" ") });
   }
 
   return blocks;
 }
 
-// ─── Sub-components ───────────────────────────────────────────
-
-function HeadingBadge({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center bg-primary/10 text-primary text-[0.7rem] font-mono font-bold px-1.5 py-0.5 rounded border border-primary/20 leading-none shrink-0">
-      {children}
-    </span>
-  );
-}
+// ─── Special box config ───────────────────────────────────────
 
 const specialConfig: Record<
-  Variant,
-  { border: string; bg: string; tagClass: string }
+  SpecialVariant,
+  { border: string; bg: string; labelClass: string; emoji: string }
 > = {
   example: {
-    border: "border-blue-500/40",
-    bg: "bg-blue-500/5",
-    tagClass: "text-blue-400",
+    border: "border-blue-700",
+    bg: "bg-blue-900/30",
+    labelClass: "text-blue-400",
+    emoji: "📘",
   },
   consider: {
-    border: "border-amber-500/40",
-    bg: "bg-amber-500/5",
-    tagClass: "text-amber-400",
+    border: "border-purple-700",
+    bg: "bg-purple-900/30",
+    labelClass: "text-purple-400",
+    emoji: "💭",
   },
-  note: {
-    border: "border-muted-foreground/30",
-    bg: "bg-muted/20",
-    tagClass: "text-muted-foreground",
+  beaware: {
+    border: "border-amber-700",
+    bg: "bg-amber-900/30",
+    labelClass: "text-amber-400",
+    emoji: "⚠️",
   },
 };
 
@@ -164,13 +120,13 @@ export function ContentRenderer({ text, className }: ContentRendererProps) {
         switch (block.type) {
           case "heading":
             return (
-              <h3
-                key={i}
-                className="flex items-baseline gap-2 font-semibold text-foreground pt-3 first:pt-0"
-              >
-                <HeadingBadge>{block.prefix}</HeadingBadge>
-                <span>{block.rest}</span>
-              </h3>
+              <div key={i}>
+                {i > 0 && <hr className="border-border/40 mb-4" />}
+                <h3 className="text-base font-semibold text-foreground mb-1">
+                  <span className="text-primary font-mono mr-2">{block.code}</span>
+                  {block.title}
+                </h3>
+              </div>
             );
 
           case "paragraph":
@@ -198,21 +154,16 @@ export function ContentRenderer({ text, className }: ContentRendererProps) {
               <div
                 key={i}
                 className={cn(
-                  "border-l-2 rounded-r-lg px-4 py-3 space-y-1.5",
+                  "rounded-lg border px-4 py-3 space-y-1.5",
                   cfg.border,
                   cfg.bg
                 )}
               >
-                <span
-                  className={cn(
-                    "block text-[0.7rem] font-mono font-bold uppercase tracking-widest",
-                    cfg.tagClass
-                  )}
-                >
-                  {block.tag}
-                </span>
+                <p className={cn("text-xs font-bold uppercase tracking-widest", cfg.labelClass)}>
+                  {cfg.emoji} {block.tag}
+                </p>
                 {block.body && (
-                  <p className="text-foreground/75 leading-relaxed">{block.body}</p>
+                  <p className="text-foreground/80 leading-relaxed">{block.body}</p>
                 )}
               </div>
             );
