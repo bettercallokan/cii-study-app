@@ -54,7 +54,7 @@ export default function LoginPage() {
       email: trimmed,
       options: {
         emailRedirectTo: `${SITE_URL}/auth/callback`,
-        shouldCreateUser: false,
+        shouldCreateUser: true,
       },
     });
 
