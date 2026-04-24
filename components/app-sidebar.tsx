@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   BookOpen,
@@ -17,6 +17,14 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { createBrowserClient } from "@supabase/ssr";
+
+function createClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
 
 const modules = [
   { code: "W01", name: "Award in General Insurance", href: "/courses/w01" },
@@ -30,9 +38,22 @@ const navigation = [
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isModulesOpen, setIsModulesOpen] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    createClient()
+      .auth.getUser()
+      .then(({ data }) => setUserEmail(data.user?.email ?? null));
+  }, []);
+
+  async function handleSignOut() {
+    await createClient().auth.signOut();
+    router.push("/login");
+  }
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
@@ -228,18 +249,20 @@ export function AppSidebar() {
           "flex items-center gap-3 rounded-lg bg-secondary/30 mt-2",
           isCollapsed ? "justify-center p-2" : "px-3 py-3"
         )}>
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/40 to-primary/20 flex items-center justify-center text-xs font-semibold text-primary shrink-0">
-            M
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/40 to-primary/20 flex items-center justify-center text-xs font-semibold text-primary shrink-0 uppercase">
+            {userEmail ? userEmail[0] : "?"}
           </div>
           {!isCollapsed && (
             <>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">Mehmet</p>
-                <p className="text-[11px] text-muted-foreground truncate">Premium Plan</p>
+                <p className="text-xs font-medium text-foreground truncate">
+                  {userEmail ?? "Loading…"}
+                </p>
               </div>
-              <button 
-                className="p-1.5 rounded-md hover:bg-secondary transition-colors"
-                title="Log out"
+              <button
+                onClick={handleSignOut}
+                className="p-1.5 rounded-md hover:bg-secondary transition-colors shrink-0"
+                title="Sign out"
               >
                 <LogOut className="w-4 h-4 text-muted-foreground" />
               </button>
