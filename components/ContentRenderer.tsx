@@ -13,6 +13,32 @@ type Block =
   | { type: "special"; tag: string; body: string; variant: SpecialVariant }
   | { type: "table"; rows: string[][] };
 
+// ─── Parser helpers ───────────────────────────────────────────
+
+type LineSegment = { lines: string[]; piped: boolean };
+
+function segmentByPipe(lines: string[]): LineSegment[] {
+  const out: LineSegment[] = [];
+  let cur: LineSegment | null = null;
+  for (const line of lines) {
+    const piped = line.includes("|");
+    if (!cur || cur.piped !== piped) {
+      if (cur) out.push(cur);
+      cur = { lines: [line], piped };
+    } else {
+      cur.lines.push(line);
+    }
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+function isValidTable(lines: string[]): boolean {
+  if (lines.length < 2) return false;
+  const counts = lines.map((l) => (l.match(/\|/g) ?? []).length);
+  return Math.max(...counts) - Math.min(...counts) <= 1;
+}
+
 // ─── Parser ───────────────────────────────────────────────────
 
 function parseBlocks(text: string): Block[] {
@@ -60,18 +86,31 @@ function parseBlocks(text: string): Block[] {
       continue;
     }
 
-    // f: Table — contains | and at least 2 matching lines
-    const pipedLines = lines.filter((l) => l.includes("|"));
-    if (pipedLines.length >= 2) {
-      const rows = pipedLines.map((l) =>
-        l.split("|").map((c) => c.trim()).filter(Boolean)
-      );
-      blocks.push({ type: "table", rows });
-      continue;
+    // f/g: Split block into runs of piped vs non-piped lines.
+    // A run of piped lines is a table only if >= 2 lines with consistent
+    // pipe counts (±1). Everything else renders as paragraphs so no text
+    // is silently dropped.
+    const segments = segmentByPipe(lines);
+    for (const seg of segments) {
+      if (seg.piped && isValidTable(seg.lines)) {
+        blocks.push({
+          type: "table",
+          rows: seg.lines.map((l) =>
+            l.split("|").map((c) => c.trim()).filter(Boolean)
+          ),
+        });
+      } else if (!seg.piped && seg.lines.length === 1) {
+        // Single non-piped line — could still be a heading inside a mixed block
+        const hm = seg.lines[0].match(/^([A-Z]\d+)\s+(.+)$/);
+        if (hm) {
+          blocks.push({ type: "heading", code: hm[1], title: hm[2] });
+        } else {
+          blocks.push({ type: "paragraph", text: seg.lines[0] });
+        }
+      } else {
+        blocks.push({ type: "paragraph", text: seg.lines.join(" ") });
+      }
     }
-
-    // g: Normal paragraph
-    blocks.push({ type: "paragraph", text: lines.join(" ") });
   }
 
   return blocks;
