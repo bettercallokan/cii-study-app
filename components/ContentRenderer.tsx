@@ -12,107 +12,212 @@ type Block =
   | { type: "callout"; variant: "example" | "consider" | "aware"; label: string; body: string }
   | { type: "paragraph"; text: string };
 
+// ─── Callout splitter ─────────────────────────────────────────
+// Splits a chunk on inline [BE AWARE] / [CONSIDER THIS] / [EXAMPLE x] markers.
+// Text before each marker → text part; marker + following text → callout part.
+
+type RawPart =
+  | { isCallout: false; text: string }
+  | { isCallout: true; tag: string; body: string };
+
+function splitOnCallouts(chunk: string): RawPart[] {
+  const re = /\[(BE AWARE|CONSIDER THIS|EXAMPLE[\s\d.]*)\]/gi;
+  const raw: Array<{ isCallout: false; text: string } | { isCallout: true; tag: string }> = [];
+  let lastEnd = 0;
+  let m: RegExpExecArray | null;
+
+  while ((m = re.exec(chunk)) !== null) {
+    if (m.index > lastEnd) {
+      raw.push({ isCallout: false, text: chunk.slice(lastEnd, m.index) });
+    }
+    raw.push({ isCallout: true, tag: m[1] });
+    lastEnd = m.index + m[0].length;
+  }
+  if (lastEnd < chunk.length) {
+    raw.push({ isCallout: false, text: chunk.slice(lastEnd) });
+  }
+
+  // Attach the following text part as the callout body
+  const parts: RawPart[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const item = raw[i];
+    if (item.isCallout) {
+      let body = "";
+      if (i + 1 < raw.length && !raw[i + 1].isCallout) {
+        body = (raw[i + 1] as { isCallout: false; text: string }).text.trim();
+        i++;
+      }
+      parts.push({ isCallout: true, tag: item.tag, body });
+    } else if (item.text.trim()) {
+      parts.push({ isCallout: false, text: item.text });
+    }
+  }
+  return parts;
+}
+
+// ─── Inline table extractor ────────────────────────────────────
+// Finds pipe-containing segments inside a paragraph using the pattern:
+//   non-pipe/non-period text  |  non-pipe/non-period text  (. or space)
+// Returns pre-text, table rows, and post-text, or null if < 2 segments found.
+
+function extractInlineTable(
+  text: string
+): { pre: string; headers: string[]; rows: string[][]; post: string } | null {
+  // Each match: "left | right" terminated by ". " or whitespace
+  const re = /([^.|]+\|[^.|]+(?:\.\s+|\s+))/g;
+  const segs: Array<{ index: number; end: number; text: string }> = [];
+  let m: RegExpExecArray | null;
+
+  while ((m = re.exec(text)) !== null) {
+    segs.push({ index: m.index, end: m.index + m[0].length, text: m[0] });
+  }
+  if (segs.length < 2) return null;
+
+  const tableStart = segs[0].index;
+  const tableEnd = segs[segs.length - 1].end;
+
+  // Text strictly before the first segment
+  const beforeTable = text.slice(0, tableStart);
+  const afterTable = text.slice(tableEnd).trim();
+
+  // Find the last ". " boundary inside beforeTable to split pre-paragraph from
+  // any text that belongs to the table header row
+  const lastPeriodSpace = beforeTable.lastIndexOf(". ");
+  let pre: string;
+  let extraHead: string;
+  if (lastPeriodSpace === -1) {
+    pre = "";
+    extraHead = beforeTable.trim();
+  } else {
+    pre = beforeTable.slice(0, lastPeriodSpace + 1).trim();
+    extraHead = beforeTable.slice(lastPeriodSpace + 2).trim();
+  }
+
+  // Parse each segment into table cells
+  const rawRows = segs.map((seg) =>
+    seg.text
+      .trim()
+      .replace(/[.\s]+$/, "")
+      .split("|")
+      .map((c) => c.trim())
+      .filter(Boolean)
+  );
+
+  // Rows with 3+ cells are likely two rows merged — split into pairs
+  const normalizedRows: string[][] = [];
+  for (const row of rawRows) {
+    if (row.length <= 2) {
+      normalizedRows.push(row);
+    } else {
+      for (let i = 0; i + 1 < row.length; i += 2) {
+        normalizedRows.push([row[i], row[i + 1]]);
+      }
+    }
+  }
+
+  // extraHead with "|" is a header row; without "|" it belongs to pre
+  if (extraHead.includes("|")) {
+    normalizedRows.unshift(
+      extraHead.split("|").map((c) => c.trim()).filter(Boolean)
+    );
+  } else if (extraHead) {
+    pre = pre ? `${pre} ${extraHead}` : extraHead;
+  }
+
+  if (normalizedRows.length < 2) return null;
+
+  return {
+    pre: pre.trim(),
+    headers: normalizedRows[0],
+    rows: normalizedRows.slice(1),
+    post: afterTable,
+  };
+}
+
+// ─── Per-text-part processor ──────────────────────────────────
+
+function processTextPart(text: string, out: Block[]): void {
+  const trimmed = text.trim();
+  if (!trimmed) return;
+
+  // Heading: single line matching A1, B2 …
+  const hm = trimmed.match(/^([A-Z]\d+)\s+(.+)$/);
+  if (hm && !trimmed.includes("\n")) {
+    out.push({ type: "heading", code: hm[1], text: hm[2] });
+    return;
+  }
+
+  // Bullet list — every line starts with •
+  const lines = trimmed.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (lines.length > 0 && lines.every((l) => l.startsWith("•"))) {
+    out.push({ type: "bullets", items: lines.map((l) => l.replace(/^•\s*/, "")) });
+    return;
+  }
+
+  // Inline table detection
+  if (trimmed.includes("|")) {
+    const tbl = extractInlineTable(trimmed);
+    if (tbl) {
+      if (tbl.pre) out.push({ type: "paragraph", text: tbl.pre });
+      out.push({ type: "table", headers: tbl.headers, rows: tbl.rows });
+      if (tbl.post) out.push({ type: "paragraph", text: tbl.post });
+      return;
+    }
+  }
+
+  // Mixed block — process line by line to find inline headings / bullets
+  const subLines = trimmed.split("\n");
+  let buffer: string[] = [];
+
+  const flushBuffer = () => {
+    if (buffer.length > 0) {
+      const joined = buffer.join(" ").trim();
+      if (joined) out.push({ type: "paragraph", text: joined });
+      buffer = [];
+    }
+  };
+
+  for (const line of subLines) {
+    const t = line.trim();
+    const inlineHead = t.match(/^([A-Z]\d+)\s+(.+)$/);
+    if (inlineHead && !t.includes("|")) {
+      flushBuffer();
+      out.push({ type: "heading", code: inlineHead[1], text: inlineHead[2] });
+      continue;
+    }
+    if (t.startsWith("•")) {
+      flushBuffer();
+      out.push({ type: "bullets", items: [t.replace(/^•\s*/, "")] });
+      continue;
+    }
+    buffer.push(t);
+  }
+  flushBuffer();
+}
+
+// ─── Main parser ─────────────────────────────────────────────
+
 function classifyAndParse(raw: string): Block[] {
-  // Split on double newline to get rough blocks
+  // STEP 1: split on double newline
   const chunks = raw.split(/\n\n+/).map((s) => s.trim()).filter(Boolean);
   const blocks: Block[] = [];
 
   for (const chunk of chunks) {
-    // 1. Callout boxes
-    const calloutMatch = chunk.match(
-      /^\[(EXAMPLE[\s\d.]*|CONSIDER THIS|BE AWARE)\]\s*([\s\S]*)$/i
-    );
-    if (calloutMatch) {
-      const tag = calloutMatch[1].toUpperCase();
-      let variant: "example" | "consider" | "aware" = "example";
-      if (tag.includes("CONSIDER")) variant = "consider";
-      else if (tag.includes("AWARE")) variant = "aware";
-      blocks.push({
-        type: "callout",
-        variant,
-        label: calloutMatch[1].trim(),
-        body: calloutMatch[2].trim(),
-      });
-      continue;
-    }
+    // STEP 2: split each chunk on inline callout markers
+    const parts = splitOnCallouts(chunk);
 
-    // 2. Sub-headings like A1, B2, C3 etc.
-    const headingMatch = chunk.match(/^([A-Z]\d+)\s+(.+)$/);
-    if (headingMatch && chunk.indexOf("\n") === -1) {
-      blocks.push({
-        type: "heading",
-        code: headingMatch[1],
-        text: headingMatch[2],
-      });
-      continue;
-    }
-
-    // 3. Bullet list — every line starts with •
-    const lines = chunk.split("\n").map((l) => l.trim());
-    if (lines.length > 0 && lines.every((l) => l.startsWith("•"))) {
-      blocks.push({
-        type: "bullets",
-        items: lines.map((l) => l.replace(/^•\s*/, "")),
-      });
-      continue;
-    }
-
-    // 4. Table — at least 2 lines, 80%+ have pipe, consistent pipe count
-    if (lines.length >= 2) {
-      const pipeLines = lines.filter((l) => l.includes("|"));
-      const pipeRatio = pipeLines.length / lines.length;
-      if (pipeRatio >= 0.8) {
-        const pipeCounts = pipeLines.map(
-          (l) => (l.match(/\|/g) || []).length
-        );
-        const avgPipes = pipeCounts.reduce((a, b) => a + b, 0) / pipeCounts.length;
-        const consistent = pipeCounts.every((c) => Math.abs(c - avgPipes) <= 1);
-        if (consistent) {
-          const tableLines = lines.filter((l) => l.includes("|"));
-          const split = (l: string) =>
-            l.split("|").map((c) => c.trim()).filter(Boolean);
-          const headers = split(tableLines[0]);
-          const rows = tableLines.slice(1).map(split);
-          blocks.push({ type: "table", headers, rows });
-          continue;
-        }
+    for (const part of parts) {
+      if (part.isCallout) {
+        const upper = part.tag.toUpperCase();
+        let variant: "example" | "consider" | "aware" = "example";
+        if (upper.includes("CONSIDER")) variant = "consider";
+        else if (upper.includes("AWARE")) variant = "aware";
+        blocks.push({ type: "callout", variant, label: part.tag, body: part.body });
+      } else {
+        // STEP 3-6: heading / bullets / inline table / paragraph
+        processTextPart(part.text, blocks);
       }
     }
-
-    // 5. Mixed block — may contain inline heading or partial bullets
-    // Split by single newline and process each line
-    const subLines = chunk.split("\n");
-    let buffer: string[] = [];
-
-    const flushBuffer = () => {
-      if (buffer.length > 0) {
-        const joined = buffer.join(" ").trim();
-        if (joined) blocks.push({ type: "paragraph", text: joined });
-        buffer = [];
-      }
-    };
-
-    for (const line of subLines) {
-      const trimmed = line.trim();
-      // inline heading
-      const inlineHead = trimmed.match(/^([A-Z]\d+)\s+(.+)$/);
-      if (inlineHead && trimmed.indexOf("|") === -1) {
-        flushBuffer();
-        blocks.push({ type: "heading", code: inlineHead[1], text: inlineHead[2] });
-        continue;
-      }
-      // bullet
-      if (trimmed.startsWith("•")) {
-        flushBuffer();
-        // collect consecutive bullets
-        const bulletItems = [trimmed.replace(/^•\s*/, "")];
-        // we just push single bullet — next lines will also be checked
-        blocks.push({ type: "bullets", items: bulletItems });
-        continue;
-      }
-      buffer.push(trimmed);
-    }
-    flushBuffer();
   }
 
   // Merge consecutive bullet blocks
@@ -129,6 +234,8 @@ function classifyAndParse(raw: string): Block[] {
   return merged;
 }
 
+// ─── Highlight helper ────────────────────────────────────────
+
 function highlightTerms(text: string) {
   // Highlight 'quoted terms'
   const parts = text.split(/('(?:[^']+)')/g);
@@ -144,6 +251,8 @@ function highlightTerms(text: string) {
     return <span key={i}>{part}</span>;
   });
 }
+
+// ─── Component ───────────────────────────────────────────────
 
 export default function ContentRenderer({ content }: ContentRendererProps) {
   if (!content) {
