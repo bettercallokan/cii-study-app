@@ -9,7 +9,6 @@ import {
   ChevronRight,
   BookOpen,
   ClipboardList,
-  ArrowRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -55,8 +54,8 @@ function ProgressBar({ value, className }: { value: number; className?: string }
 
 function WelcomeHeader() {
   return (
-    <div className="mb-8">
-      <h1 className="text-2xl font-semibold text-foreground tracking-tight">
+    <div className="mb-8 pt-8">
+      <h1 className="text-3xl font-bold text-foreground tracking-tight">
         Welcome back, <span className="text-primary">Mehmet</span>
       </h1>
       <p className="text-muted-foreground mt-1">
@@ -64,7 +63,7 @@ function WelcomeHeader() {
       </p>
 
       {/* Global Progress */}
-      <div className="mt-6 p-5 rounded-xl border border-border bg-card">
+      <div className="mt-6 py-4 md:p-5 md:rounded-xl md:border md:border-border md:bg-card">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Target className="w-4 h-4 text-primary" />
@@ -83,7 +82,7 @@ function WelcomeHeader() {
 
 function ContinueLearningCard() {
   return (
-    <div className="rounded-xl border border-border bg-card overflow-hidden">
+    <div className="overflow-hidden md:rounded-xl md:border md:border-border md:bg-card">
       <div className="p-5 border-b border-border">
         <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-3">
           <Clock className="w-3.5 h-3.5" />
@@ -119,8 +118,8 @@ function ContinueLearningCard() {
 
 function ModulesOverviewCard() {
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
-      <div className="flex items-center justify-between mb-5">
+    <div className="py-4 md:rounded-xl md:border md:border-border md:bg-card md:p-5">
+      <div className="flex items-center justify-between mb-3 md:mb-5">
         <div className="flex items-center gap-2">
           <BookOpen className="w-4 h-4 text-primary" />
           <h3 className="font-semibold text-foreground">Your Modules</h3>
@@ -133,34 +132,26 @@ function ModulesOverviewCard() {
           <ChevronRight className="w-3 h-3" />
         </Link>
       </div>
-      <div className="space-y-4">
+      <div className="divide-y divide-border/50">
         {modules.map((module) => (
-          <Link 
-            key={module.code} 
+          <Link
+            key={module.code}
             href={module.href}
-            className="block group"
+            className="flex items-center gap-3 min-h-[48px] py-3 group"
           >
-            <div className="flex items-center gap-3 mb-2">
-              <span className={cn(
-                "text-[10px] font-bold px-1.5 py-0.5 rounded",
-                module.progress > 0 ? "bg-primary/20 text-primary" : "bg-secondary text-muted-foreground"
-              )}>
-                {module.code}
-              </span>
-              <span className="text-sm text-foreground group-hover:text-primary transition-colors flex-1 truncate">
-                {module.name}
-              </span>
-              <span className="text-xs font-medium text-muted-foreground">
-                {module.progress}%
-              </span>
-            </div>
-            <ProgressBar
-              value={module.progress}
-              className={cn(
-                "h-1.5",
-                module.progress === 0 && "[&>div]:bg-muted-foreground/30"
-              )}
-            />
+            <span className={cn(
+              "text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0",
+              module.progress > 0 ? "bg-primary/20 text-primary" : "bg-secondary text-muted-foreground"
+            )}>
+              {module.code}
+            </span>
+            <span className="text-sm text-foreground group-hover:text-primary transition-colors flex-1 truncate">
+              {module.name}
+            </span>
+            <span className="text-xs font-medium text-muted-foreground shrink-0">
+              {module.progress}%
+            </span>
+            <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
           </Link>
         ))}
       </div>
@@ -170,8 +161,8 @@ function ModulesOverviewCard() {
 
 function PracticeExamsCard() {
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
-      <div className="flex items-center justify-between mb-5">
+    <div className="py-4 md:rounded-xl md:border md:border-border md:bg-card md:p-5">
+      <div className="flex items-center justify-between mb-3 md:mb-5">
         <div className="flex items-center gap-2">
           <ClipboardList className="w-4 h-4 text-primary" />
           <h3 className="font-semibold text-foreground">Practice Exams</h3>
@@ -184,25 +175,21 @@ function PracticeExamsCard() {
           <ChevronRight className="w-3 h-3" />
         </Link>
       </div>
-      <div className="space-y-3">
+      <div className="divide-y divide-border/50">
         {upcomingExams.map((exam, index) => (
-          <div
+          <Link
             key={index}
-            className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors"
+            href="/practice-exams"
+            className="flex items-center gap-3 min-h-[48px] py-3 group hover:bg-secondary/10 transition-colors"
           >
-            <div>
+            <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-foreground">{exam.name}</p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {exam.questions} questions · {exam.duration}
               </p>
             </div>
-            <Link
-              href="/practice-exams"
-              className="p-2 rounded-lg hover:bg-secondary transition-colors"
-            >
-              <ArrowRight className="w-4 h-4 text-muted-foreground" />
-            </Link>
-          </div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+          </Link>
         ))}
       </div>
     </div>
@@ -211,16 +198,16 @@ function PracticeExamsCard() {
 
 function RecentActivityCard() {
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
-      <div className="flex items-center gap-2 mb-4">
+    <div className="py-4 md:rounded-xl md:border md:border-border md:bg-card md:p-5">
+      <div className="flex items-center gap-2 mb-3">
         <TrendingUp className="w-4 h-4 text-primary" />
         <h3 className="font-semibold text-foreground">Recent Activity</h3>
       </div>
-      <div className="space-y-3">
+      <div className="divide-y divide-border/50">
         {recentActivity.map((item, index) => (
           <div
             key={index}
-            className="flex items-center gap-3 py-2 border-b border-border last:border-0"
+            className="flex items-center gap-3 min-h-[48px] py-3"
           >
             <div className="w-2 h-2 rounded-full bg-primary shrink-0" />
             <div className="flex-1 min-w-0">

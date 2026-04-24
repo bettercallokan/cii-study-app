@@ -65,12 +65,12 @@ export default function CoursesPage() {
     <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto px-6 py-8">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-8 pt-8">
           <div className="flex items-center gap-2 text-xs font-medium text-primary mb-3">
             <GraduationCap className="w-4 h-4" />
             CII Qualifications
           </div>
-          <h1 className="text-2xl font-semibold text-foreground tracking-tight">
+          <h1 className="text-3xl font-bold text-foreground tracking-tight">
             Courses
           </h1>
           <p className="text-muted-foreground mt-1">
@@ -78,8 +78,8 @@ export default function CoursesPage() {
           </p>
         </div>
 
-        {/* Course Cards */}
-        <div className="space-y-4">
+        {/* Course List */}
+        <div className="divide-y divide-border/50 md:space-y-4 md:divide-y-0">
           {courses.map((course) => {
             const colors = colorMap[course.color as CourseColor];
             return (
@@ -87,48 +87,48 @@ export default function CoursesPage() {
                 key={course.code}
                 href={`/courses/${course.code}`}
                 className={cn(
-                  "group flex flex-col sm:flex-row items-start sm:items-center gap-5 p-6 rounded-xl border border-border bg-card transition-all duration-200",
+                  "group flex items-center gap-4 min-h-[72px] py-4 transition-all duration-200 md:gap-5 md:p-6 md:rounded-xl md:border md:border-border md:bg-card",
                   colors.card
                 )}
               >
-                {/* Icon + Badge */}
+                {/* Icon */}
                 <div
                   className={cn(
-                    "flex items-center justify-center w-14 h-14 rounded-xl border shrink-0",
+                    "flex items-center justify-center w-12 h-12 rounded-xl border shrink-0",
                     colors.icon
                   )}
                 >
-                  <BookOpen className="w-6 h-6" />
+                  <BookOpen className="w-5 h-5" />
                 </div>
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2.5 mb-1.5">
+                  <div className="flex items-center gap-2 mb-1">
                     <span
                       className={cn(
-                        "px-2.5 py-0.5 rounded-full border text-xs font-bold tracking-wider",
+                        "px-2.5 py-0.5 rounded-full border text-xs font-bold tracking-wider shrink-0",
                         colors.badge
                       )}
                     >
                       {course.subtitle}
                     </span>
-                    <h2 className="font-semibold text-foreground group-hover:text-foreground transition-colors">
+                    <h2 className="font-semibold text-foreground truncate">
                       {course.title}
                     </h2>
                   </div>
-                  <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+                  <p className="text-xs text-muted-foreground leading-relaxed hidden sm:block">
                     {course.description}
                   </p>
 
-                  {/* Stat Pills */}
-                  <div className="flex flex-wrap gap-2">
+                  {/* Stat Pills - desktop only */}
+                  <div className="hidden md:flex flex-wrap gap-2 mt-3">
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary text-xs text-muted-foreground">
                       <BookOpen className="w-3 h-3" />
                       {course.units} units
                     </span>
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary text-xs text-muted-foreground">
                       <ClipboardList className="w-3 h-3" />
-                      {course.examQuestions} exam questions
+                      {course.examQuestions} questions
                     </span>
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary text-xs text-muted-foreground">
                       <Clock className="w-3 h-3" />
@@ -137,7 +137,7 @@ export default function CoursesPage() {
                   </div>
                 </div>
 
-                <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors shrink-0 hidden sm:block" />
+                <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
               </Link>
             );
           })}

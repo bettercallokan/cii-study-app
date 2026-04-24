@@ -230,16 +230,16 @@ function TabBar({
   ];
 
   return (
-    <div className="flex items-center gap-1 p-1 rounded-xl border border-border bg-secondary/30 mb-6">
+    <div className="flex gap-3 overflow-x-auto scrollbar-hide snap-x touch-pan-x pb-2 mb-6 -mx-6 px-6 md:mx-0 md:px-0">
       {tabs.map((tab) => (
         <button
           key={tab.id}
           onClick={() => onChange(tab.id)}
           className={cn(
-            "flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-all",
+            "snap-start whitespace-nowrap flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-medium transition-all shrink-0",
             activeTab === tab.id
-              ? "bg-card text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
+              ? "bg-primary text-primary-foreground"
+              : "bg-secondary text-muted-foreground hover:text-foreground"
           )}
         >
           <tab.icon className="w-3.5 h-3.5" />
@@ -810,7 +810,7 @@ export default function CourseDetailPage({
           />
 
           {/* Main content */}
-          <div className="flex-1 min-w-0 rounded-xl border border-border bg-card p-6 sm:p-8">
+          <div className="flex-1 min-w-0 p-0 sm:p-0 md:rounded-xl md:border md:border-border md:bg-card md:p-6 md:sm:p-8">
             {activeChapter && activeSection ? (
               <>
                 <TabBar activeTab={activeTab} onChange={setActiveTab} />

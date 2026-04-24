@@ -104,18 +104,16 @@ function SettingsSection({
   };
 
   return (
-    <div className="rounded-xl border border-border bg-card overflow-hidden">
-      <div className="px-5 py-4 border-b border-border bg-secondary/30">
-        <div className="flex items-center gap-3">
-          <section.icon className="w-5 h-5 text-primary" />
-          <h3 className="font-semibold text-foreground">{section.title}</h3>
-        </div>
+    <div className="md:rounded-xl md:border md:border-border md:bg-card md:overflow-hidden">
+      <div className="flex items-center gap-3 py-3 mb-1 md:px-5 md:py-4 md:mb-0 md:border-b md:border-border md:bg-secondary/30">
+        <section.icon className="w-5 h-5 text-primary" />
+        <h3 className="font-semibold text-foreground">{section.title}</h3>
       </div>
-      <div className="divide-y divide-border">
+      <div className="divide-y divide-border/50 md:divide-border">
         {section.items.map((item) => (
           <div
             key={item.label}
-            className="flex items-center justify-between px-5 py-4 hover:bg-secondary/20 transition-colors"
+            className="flex items-center justify-between px-0 min-h-[48px] py-3 md:px-5 md:py-4 hover:bg-secondary/20 transition-colors"
           >
             <div>
               <p className="text-sm font-medium text-foreground">{item.label}</p>
@@ -148,12 +146,12 @@ export default function SettingsPage() {
     <div className="min-h-screen bg-background">
       <div className="max-w-3xl mx-auto px-6 py-8">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-8 pt-8">
           <div className="flex items-center gap-2 text-xs font-medium text-primary mb-3">
             <Settings className="w-4 h-4" />
             Preferences
           </div>
-          <h1 className="text-2xl font-semibold text-foreground tracking-tight">
+          <h1 className="text-3xl font-bold text-foreground tracking-tight">
             Settings
           </h1>
           <p className="text-muted-foreground mt-1">
