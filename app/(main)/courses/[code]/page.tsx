@@ -21,7 +21,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ContentRenderer } from "@/components/ContentRenderer";
+import ContentRenderer from "@/components/ContentRenderer";
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -309,7 +309,7 @@ function ContentTab({
       {/* Content */}
       {section.content_text ? (
         <div className="rounded-xl border border-border bg-secondary/20 p-6">
-          <ContentRenderer text={section.content_text} />
+          <ContentRenderer content={section.content_text} />
         </div>
       ) : (
         <div className="space-y-4">

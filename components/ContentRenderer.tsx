@@ -1,241 +1,216 @@
+// components/ContentRenderer.tsx
 "use client";
 
-import { cn } from "@/lib/utils";
-
-// ─── Types ────────────────────────────────────────────────────
-
-type SpecialVariant = "example" | "consider" | "beaware";
+interface ContentRendererProps {
+  content: string;
+}
 
 type Block =
-  | { type: "paragraph"; text: string }
-  | { type: "heading"; code: string; title: string }
+  | { type: "heading"; code: string; text: string }
   | { type: "bullets"; items: string[] }
-  | { type: "special"; tag: string; body: string; variant: SpecialVariant }
-  | { type: "table"; rows: string[][] };
+  | { type: "table"; headers: string[]; rows: string[][] }
+  | { type: "callout"; variant: "example" | "consider" | "aware"; label: string; body: string }
+  | { type: "paragraph"; text: string };
 
-// ─── Parser helpers ───────────────────────────────────────────
-
-type LineSegment = { lines: string[]; piped: boolean };
-
-function segmentByPipe(lines: string[]): LineSegment[] {
-  const out: LineSegment[] = [];
-  let cur: LineSegment | null = null;
-  for (const line of lines) {
-    const piped = line.includes("|");
-    if (!cur || cur.piped !== piped) {
-      if (cur) out.push(cur);
-      cur = { lines: [line], piped };
-    } else {
-      cur.lines.push(line);
-    }
-  }
-  if (cur) out.push(cur);
-  return out;
-}
-
-function isValidTable(lines: string[]): boolean {
-  if (lines.length < 2) return false;
-  const counts = lines.map((l) => (l.match(/\|/g) ?? []).length);
-  return Math.max(...counts) - Math.min(...counts) <= 1;
-}
-
-// ─── Parser ───────────────────────────────────────────────────
-
-function parseBlocks(text: string): Block[] {
+function classifyAndParse(raw: string): Block[] {
+  // Split on double newline to get rough blocks
+  const chunks = raw.split(/\n\n+/).map((s) => s.trim()).filter(Boolean);
   const blocks: Block[] = [];
-  const rawBlocks = text.split(/\n{2,}/);
 
-  for (const raw of rawBlocks) {
-    const trimmed = raw.trim();
-    if (!trimmed) continue;
-
-    const lines = trimmed.split("\n").map((l) => l.trim()).filter(Boolean);
-
-    // a/b/c: [EXAMPLE...] / [CONSIDER THIS] / [BE AWARE] → special box
-    if (trimmed.startsWith("[")) {
-      const m = trimmed.match(/^\[([^\]]+)\]([\s\S]*)$/);
-      if (m) {
-        const tag = m[1].trim();
-        const body = m[2].trim();
-        const upper = tag.toUpperCase();
-        const variant: SpecialVariant = upper.startsWith("EXAMPLE")
-          ? "example"
-          : upper.startsWith("CONSIDER")
-          ? "consider"
-          : "beaware";
-        blocks.push({ type: "special", tag, body, variant });
-        continue;
-      }
-    }
-
-    // d: Heading — single-line block matching A1, B2, C3 … pattern
-    if (lines.length === 1) {
-      const hm = trimmed.match(/^([A-Z]\d+)\s+(.+)$/);
-      if (hm) {
-        blocks.push({ type: "heading", code: hm[1], title: hm[2] });
-        continue;
-      }
-    }
-
-    // e: Bullet list — every line starts with •
-    if (lines.length > 0 && lines.every((l) => l.startsWith("•"))) {
+  for (const chunk of chunks) {
+    // 1. Callout boxes
+    const calloutMatch = chunk.match(
+      /^\[(EXAMPLE[\s\d.]*|CONSIDER THIS|BE AWARE)\]\s*([\s\S]*)$/i
+    );
+    if (calloutMatch) {
+      const tag = calloutMatch[1].toUpperCase();
+      let variant: "example" | "consider" | "aware" = "example";
+      if (tag.includes("CONSIDER")) variant = "consider";
+      else if (tag.includes("AWARE")) variant = "aware";
       blocks.push({
-        type: "bullets",
-        items: lines.map((l) => l.replace(/^•\s*/, "").trim()),
+        type: "callout",
+        variant,
+        label: calloutMatch[1].trim(),
+        body: calloutMatch[2].trim(),
       });
       continue;
     }
 
-    // f/g: Split block into runs of piped vs non-piped lines.
-    // A run of piped lines is a table only if >= 2 lines with consistent
-    // pipe counts (±1). Everything else renders as paragraphs so no text
-    // is silently dropped.
-    const segments = segmentByPipe(lines);
-    for (const seg of segments) {
-      if (seg.piped && isValidTable(seg.lines)) {
-        blocks.push({
-          type: "table",
-          rows: seg.lines.map((l) =>
-            l.split("|").map((c) => c.trim()).filter(Boolean)
-          ),
-        });
-      } else if (!seg.piped && seg.lines.length === 1) {
-        // Single non-piped line — could still be a heading inside a mixed block
-        const hm = seg.lines[0].match(/^([A-Z]\d+)\s+(.+)$/);
-        if (hm) {
-          blocks.push({ type: "heading", code: hm[1], title: hm[2] });
-        } else {
-          blocks.push({ type: "paragraph", text: seg.lines[0] });
+    // 2. Sub-headings like A1, B2, C3 etc.
+    const headingMatch = chunk.match(/^([A-Z]\d+)\s+(.+)$/);
+    if (headingMatch && chunk.indexOf("\n") === -1) {
+      blocks.push({
+        type: "heading",
+        code: headingMatch[1],
+        text: headingMatch[2],
+      });
+      continue;
+    }
+
+    // 3. Bullet list — every line starts with •
+    const lines = chunk.split("\n").map((l) => l.trim());
+    if (lines.length > 0 && lines.every((l) => l.startsWith("•"))) {
+      blocks.push({
+        type: "bullets",
+        items: lines.map((l) => l.replace(/^•\s*/, "")),
+      });
+      continue;
+    }
+
+    // 4. Table — at least 2 lines, 80%+ have pipe, consistent pipe count
+    if (lines.length >= 2) {
+      const pipeLines = lines.filter((l) => l.includes("|"));
+      const pipeRatio = pipeLines.length / lines.length;
+      if (pipeRatio >= 0.8) {
+        const pipeCounts = pipeLines.map(
+          (l) => (l.match(/\|/g) || []).length
+        );
+        const avgPipes = pipeCounts.reduce((a, b) => a + b, 0) / pipeCounts.length;
+        const consistent = pipeCounts.every((c) => Math.abs(c - avgPipes) <= 1);
+        if (consistent) {
+          const tableLines = lines.filter((l) => l.includes("|"));
+          const split = (l: string) =>
+            l.split("|").map((c) => c.trim()).filter(Boolean);
+          const headers = split(tableLines[0]);
+          const rows = tableLines.slice(1).map(split);
+          blocks.push({ type: "table", headers, rows });
+          continue;
         }
-      } else {
-        blocks.push({ type: "paragraph", text: seg.lines.join(" ") });
       }
+    }
+
+    // 5. Mixed block — may contain inline heading or partial bullets
+    // Split by single newline and process each line
+    const subLines = chunk.split("\n");
+    let buffer: string[] = [];
+
+    const flushBuffer = () => {
+      if (buffer.length > 0) {
+        const joined = buffer.join(" ").trim();
+        if (joined) blocks.push({ type: "paragraph", text: joined });
+        buffer = [];
+      }
+    };
+
+    for (const line of subLines) {
+      const trimmed = line.trim();
+      // inline heading
+      const inlineHead = trimmed.match(/^([A-Z]\d+)\s+(.+)$/);
+      if (inlineHead && trimmed.indexOf("|") === -1) {
+        flushBuffer();
+        blocks.push({ type: "heading", code: inlineHead[1], text: inlineHead[2] });
+        continue;
+      }
+      // bullet
+      if (trimmed.startsWith("•")) {
+        flushBuffer();
+        // collect consecutive bullets
+        const bulletItems = [trimmed.replace(/^•\s*/, "")];
+        // we just push single bullet — next lines will also be checked
+        blocks.push({ type: "bullets", items: bulletItems });
+        continue;
+      }
+      buffer.push(trimmed);
+    }
+    flushBuffer();
+  }
+
+  // Merge consecutive bullet blocks
+  const merged: Block[] = [];
+  for (const b of blocks) {
+    const prev = merged[merged.length - 1];
+    if (b.type === "bullets" && prev?.type === "bullets") {
+      prev.items.push(...b.items);
+    } else {
+      merged.push(b);
     }
   }
 
-  return blocks;
+  return merged;
 }
 
-// ─── Special box config ───────────────────────────────────────
-
-const specialConfig: Record<
-  SpecialVariant,
-  { border: string; bg: string; labelClass: string; emoji: string }
-> = {
-  example: {
-    border: "border-blue-700",
-    bg: "bg-blue-900/30",
-    labelClass: "text-blue-400",
-    emoji: "📘",
-  },
-  consider: {
-    border: "border-purple-700",
-    bg: "bg-purple-900/30",
-    labelClass: "text-purple-400",
-    emoji: "💭",
-  },
-  beaware: {
-    border: "border-amber-700",
-    bg: "bg-amber-900/30",
-    labelClass: "text-amber-400",
-    emoji: "⚠️",
-  },
-};
-
-// ─── Main Export ──────────────────────────────────────────────
-
-interface ContentRendererProps {
-  text: string;
-  className?: string;
+function highlightTerms(text: string) {
+  // Highlight 'quoted terms'
+  const parts = text.split(/('(?:[^']+)')/g);
+  return parts.map((part, i) => {
+    const m = part.match(/^'([^']+)'$/);
+    if (m) {
+      return (
+        <span key={i} className="text-blue-300 font-medium bg-blue-900/20 px-1 rounded">
+          {m[1]}
+        </span>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
 }
 
-export function ContentRenderer({ text, className }: ContentRendererProps) {
-  if (!text) return null;
-  const blocks = parseBlocks(text);
+export default function ContentRenderer({ content }: ContentRendererProps) {
+  if (!content) {
+    return (
+      <div className="text-gray-400 italic p-8 text-center">
+        No content available for this section.
+      </div>
+    );
+  }
+
+  const blocks = classifyAndParse(content);
 
   return (
-    <div className={cn("space-y-3 text-sm", className)}>
+    <div className="space-y-4 text-gray-200 leading-relaxed">
       {blocks.map((block, i) => {
         switch (block.type) {
           case "heading":
             return (
-              <div key={i}>
-                {i > 0 && <hr className="border-border/40 mb-4" />}
-                <h3 className="text-base font-semibold text-foreground mb-1">
-                  <span className="text-primary font-mono mr-2">{block.code}</span>
-                  {block.title}
-                </h3>
+              <div key={i} className="mt-8 first:mt-0">
+                <div className="border-t border-gray-700 pt-4">
+                  <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                    <span className="text-blue-400 text-sm font-mono bg-blue-900/30 px-2 py-0.5 rounded">
+                      {block.code}
+                    </span>
+                    {block.text}
+                  </h3>
+                </div>
               </div>
-            );
-
-          case "paragraph":
-            return (
-              <p key={i} className="text-foreground/80 leading-relaxed">
-                {block.text}
-              </p>
             );
 
           case "bullets":
             return (
-              <ul key={i} className="space-y-1.5 ml-1">
+              <ul key={i} className="space-y-2 ml-4">
                 {block.items.map((item, j) => (
-                  <li key={j} className="flex gap-2.5 text-foreground/80 leading-relaxed">
-                    <span className="mt-[0.45em] h-1.5 w-1.5 shrink-0 rounded-full bg-primary/50" />
-                    <span>{item}</span>
+                  <li key={j} className="flex items-start gap-2">
+                    <span className="text-blue-400 mt-1.5 text-xs">●</span>
+                    <span>{highlightTerms(item)}</span>
                   </li>
                 ))}
               </ul>
             );
 
-          case "special": {
-            const cfg = specialConfig[block.variant];
-            return (
-              <div
-                key={i}
-                className={cn(
-                  "rounded-lg border px-4 py-3 space-y-1.5",
-                  cfg.border,
-                  cfg.bg
-                )}
-              >
-                <p className={cn("text-xs font-bold uppercase tracking-widest", cfg.labelClass)}>
-                  {cfg.emoji} {block.tag}
-                </p>
-                {block.body && (
-                  <p className="text-foreground/80 leading-relaxed">{block.body}</p>
-                )}
-              </div>
-            );
-          }
-
           case "table":
             return (
-              <div key={i} className="overflow-x-auto rounded-lg border border-border">
-                <table className="w-full text-sm border-collapse">
-                  <thead className="bg-muted/40">
-                    <tr>
-                      {block.rows[0]?.map((cell, j) => (
+              <div key={i} className="overflow-x-auto my-4">
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-600">
+                      {block.headers.map((h, j) => (
                         <th
                           key={j}
-                          className="px-4 py-2.5 text-left text-xs font-semibold text-foreground/90 uppercase tracking-wide border-b border-border"
+                          className="text-left p-3 font-semibold text-white bg-gray-800/50 first:rounded-tl-lg last:rounded-tr-lg"
                         >
-                          {cell}
+                          {h}
                         </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {block.rows.slice(1).map((row, j) => (
+                    {block.rows.map((row, j) => (
                       <tr
                         key={j}
-                        className="border-b border-border/50 last:border-0 hover:bg-muted/20 transition-colors"
+                        className="border-b border-gray-700/50 hover:bg-gray-800/30"
                       >
                         {row.map((cell, k) => (
-                          <td
-                            key={k}
-                            className="px-4 py-2.5 text-foreground/75 align-top"
-                          >
-                            {cell}
+                          <td key={k} className="p-3 text-gray-300">
+                            {highlightTerms(cell)}
                           </td>
                         ))}
                       </tr>
@@ -243,6 +218,50 @@ export function ContentRenderer({ text, className }: ContentRendererProps) {
                   </tbody>
                 </table>
               </div>
+            );
+
+          case "callout":
+            const config = {
+              example: {
+                icon: "📘",
+                bg: "bg-blue-900/20",
+                border: "border-blue-700/50",
+                title: "text-blue-300",
+              },
+              consider: {
+                icon: "💭",
+                bg: "bg-purple-900/20",
+                border: "border-purple-700/50",
+                title: "text-purple-300",
+              },
+              aware: {
+                icon: "⚠️",
+                bg: "bg-amber-900/20",
+                border: "border-amber-700/50",
+                title: "text-amber-300",
+              },
+            };
+            const c = config[block.variant];
+            return (
+              <div
+                key={i}
+                className={`${c.bg} ${c.border} border rounded-lg p-4 my-4`}
+              >
+                <div className={`font-semibold ${c.title} mb-2 flex items-center gap-2`}>
+                  <span>{c.icon}</span>
+                  {block.label}
+                </div>
+                <div className="text-gray-300 leading-relaxed">
+                  {highlightTerms(block.body)}
+                </div>
+              </div>
+            );
+
+          case "paragraph":
+            return (
+              <p key={i} className="text-gray-300 leading-relaxed">
+                {highlightTerms(block.text)}
+              </p>
             );
 
           default:
